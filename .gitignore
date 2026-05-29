@@ -16,3 +16,6 @@ frontend/.next/
 
 # Docker volumes
 pgdata/
+
+# prevent from accidentally committing gigabytes of Parquet
+delta-lake-data/

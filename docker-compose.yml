@@ -25,5 +25,31 @@ services:
     depends_on:
       - backend
 
+  etl:
+    build:
+      context: ./datalake
+      dockerfile: Dockerfile.etl
+    command: python3 -u etl_pipeline.py
+    env_file: .env
+    depends_on:
+      - db
+    volumes:
+      - delta_lake_data:/data/delta-lake
+    restart: "no"
+
+  recommender:
+    build:
+      context: ./datalake
+      dockerfile: Dockerfile.etl
+    command: python recommender.py
+    env_file: .env
+    depends_on:
+      - db
+      - etl
+    volumes:
+      - delta_lake_data:/data/delta-lake
+    restart: "no"
+
 volumes:
   pgdata:
+  delta_lake_data:

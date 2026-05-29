@@ -6,3 +6,7 @@ python-dotenv
 passlib[bcrypt]
 python-jose[cryptography]
 alembic
+deltalake
+duckdb
+pandas
+scikit-learn
