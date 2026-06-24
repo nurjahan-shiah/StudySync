@@ -19,10 +19,10 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 async def lifespan(app: FastAPI):
-    print("📅 Sessions Service starting...")
+    print("Sessions Service starting...")
     init_db()
     yield
-    print("🛑 Sessions Service shutting down...")
+    print("Sessions Service shutting down...")
 
 app = FastAPI(title="StudySync Sessions Service", version="1.0.0", lifespan=lifespan)
 
