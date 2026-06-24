@@ -13,7 +13,8 @@ sys.path.append("/shared")
 from shared_models import StudySession, Group, GroupMembership, GroupMembershipRole, Base
 from shared_database import engine, get_db
 from shared_auth import get_current_user
-from shared_schemas import StudySessionCreate, StudySessionUpdate, StudySessionResponse
+from shared_schemas import StudySessionCreate, StudySessionUpdate, StudySessionResponse, StudySessionDetailResponse, SessionRSVPCreate, SessionRSVPResponse
+from shared_models import SessionRSVP, SessionRSVPStatus
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -85,6 +86,48 @@ async def create_session(group_id: str, data: StudySessionCreate,
     db.commit()
     db.refresh(new_session)
     return new_session
+
+# US-C.5 @author: Fahad Sohail
+@app.get("/sessions/{session_id}", response_model=StudySessionDetailResponse)
+async def get_session(session_id: str, db: Session = Depends(get_db),
+                      current_user: dict = Depends(get_current_user)):
+    """Get session detail with attendee list."""
+    session = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    attendees = db.query(SessionRSVP).filter(SessionRSVP.session_id == session_id).all()
+    result = StudySessionDetailResponse.model_validate(session)
+    result.attendees = [SessionRSVPResponse.model_validate(a) for a in attendees]
+    return result
+
+# US-C.5 @author: Fahad Sohail
+@app.post("/sessions/{session_id}/rsvp", response_model=SessionRSVPResponse, status_code=201)
+async def rsvp_session(session_id: str, data: SessionRSVPCreate,
+                       db: Session = Depends(get_db),
+                       current_user: dict = Depends(get_current_user)):
+    """RSVP to a session (upsert — updates if already exists)."""
+    session = db.query(StudySession).filter(StudySession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        rsvp_status = SessionRSVPStatus(data.status)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Use: {[s.value for s in SessionRSVPStatus]}")
+    existing = (db.query(SessionRSVP)
+                  .filter(SessionRSVP.session_id == session_id,
+                          SessionRSVP.user_id == current_user["user_id"])
+                  .first())
+    if existing:
+        existing.status = rsvp_status
+        db.commit()
+        db.refresh(existing)
+        return existing
+    rsvp = SessionRSVP(id=uuid4(), session_id=session_id,
+                       user_id=current_user["user_id"], status=rsvp_status)
+    db.add(rsvp)
+    db.commit()
+    db.refresh(rsvp)
+    return rsvp
 
 @app.put("/sessions/{session_id}", response_model=StudySessionResponse)
 async def update_session(session_id: str, data: StudySessionUpdate,
