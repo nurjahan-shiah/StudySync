@@ -1,14 +1,13 @@
 # StudySync 📚
+> A university-focused study group and collaboration platform - built for students, by students.
 
-> A university-focused study group and collaboration platform - built for students, by students!
-
-StudySync helps university students connect with classmates, organize study sessions, share resources, and collaborate for courses. Think Google Classroom meets Discord study servers, but purpose-built for student-led course collaboration.
+StudySync helps university students connect with classmates, organize study sessions, share resources, and collaborate on courses. Think Google Classroom meets Discord study servers, but purpose-built for student-led course collaboration.
 
 ---
 
 ## 👥 Team Members
 
-| Name | email |
+| Name | Email |
 |---|---|
 | Nurjahan Ahmed Shiah | nshiah49@my.yorku.ca |
 | Ali Shandhor | ali2030@my.yorku.ca |
@@ -32,11 +31,12 @@ StudySync helps university students connect with classmates, organize study sess
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 16 + React + TypeScript + Tailwind CSS |
-| Backend | FastAPI (Python) |
+| Frontend | Next.js 16 + React + TypeScript |
+| Backend | FastAPI (Python) - microservices architecture |
 | Database | PostgreSQL 16 |
 | Auth | JWT via `python-jose` + `passlib[bcrypt]` |
-| ORM | SQLAlchemy + Alembic (migrations) |
+| ORM | SQLAlchemy |
+| Data Layer | Delta Lake + DuckDB + scikit-learn (recommendations) |
 | Containerization | Docker + Docker Compose |
 
 ---
@@ -45,16 +45,31 @@ StudySync helps university students connect with classmates, organize study sess
 
 ```
 StudySync/
-├── backend/
-│   ├── main.py               # FastAPI app entry point
-│   ├── requirements.txt      # Python dependencies
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   └── app/              # Next.js App Router pages
-│   ├── package.json
-│   └── Dockerfile
-├── docker-compose.yml
+├── api-gateway/              # Routes requests to microservices
+├── services/
+│   ├── auth-service/         # Registration, login, JWT
+│   ├── users-service/        # User profiles
+│   ├── groups-service/       # Study group management
+│   ├── sessions-service/     # Study session scheduling
+│   ├── resources-service/    # File/resource sharing
+│   ├── courses-service/      # Course management
+│   ├── recommendations-service/ # ML-based group recommendations
+│   └── admin-service/        # Platform administration
+├── frontend/                 # Next.js App Router (TypeScript)
+│   └── src/app/
+│       ├── page.tsx          # Landing page
+│       ├── signup/           # Registration
+│       ├── login/            # Login
+│       ├── dashboard/        # User dashboard
+│       ├── resources/        # Resources page
+│       └── admin/            # Admin console
+├── shared/                   # Shared auth utilities across services
+├── datalake/                 # Delta Lake analytics pipeline
+├── tests/
+│   └── curl/
+│       ├── signup/           # Signup endpoint tests
+│       └── dashboard/        # Dashboard/token validation tests
+├── docker-compose-microservices.yml
 └── README.md
 ```
 
@@ -64,11 +79,10 @@ StudySync/
 
 ### Prerequisites
 
-Make sure you have installed:
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Docker Compose)
 - [Git](https://git-scm.com/)
 
-> You do **not** need Python or Node.js installed locally - Docker handles everything.
+> You do **not** need Python or Node.js installed locally — Docker handles everything.
 
 ---
 
@@ -83,8 +97,6 @@ cd StudySync
 
 ### 2. Set Up Environment Variables
 
-Copy the example env file and fill in your values:
-
 ```bash
 cp .env.example .env
 ```
@@ -93,12 +105,11 @@ Open `.env` and configure:
 
 ```env
 # Database
-POSTGRES_USER=studysync
-POSTGRES_PASSWORD=yourpassword
-POSTGRES_DB=studysync_db
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=secret
+POSTGRES_DB=studysync
 
-# Backend
-DATABASE_URL=postgresql://studysync:yourpassword@db:5432/studysync_db
+# Auth
 SECRET_KEY=your-secret-key-here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -112,13 +123,17 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 ### 3. Build and Run with Docker
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose-microservices.yml up --build
 ```
 
-This will start three containers:
-- **backend** → FastAPI at `http://localhost:8000`
-- **frontend** → Next.js at `http://localhost:3000`
-- **db** → PostgreSQL at port `5432`
+This starts all containers:
+
+| Container | Description | Port |
+|---|---|---|
+| `studysync-gateway` | API Gateway | `8000` |
+| `studysync-auth` | Auth service | `8001` |
+| `studysync-db` | PostgreSQL | `5432` |
+| `studysync-frontend` | Next.js frontend | `3000` |
 
 ---
 
@@ -127,58 +142,52 @@ This will start three containers:
 | Service | URL |
 |---|---|
 | Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8000 |
-| API Docs (Swagger) | http://localhost:8000/docs |
-| Health Check | http://localhost:8000/health |
+| API Gateway | http://localhost:8000 |
+| Signup | http://localhost:3000/signup |
+| Dashboard | http://localhost:3000/dashboard |
+| Admin Console | http://localhost:3000/admin |
 
 ---
 
 ### Stopping the App
 
 ```bash
-docker compose down
+docker compose -f docker-compose-microservices.yml down
 ```
 
-To also remove the database volume (full reset):
+Full reset (removes DB volume):
 
 ```bash
-docker compose down -v
+docker compose -f docker-compose-microservices.yml down -v
 ```
 
 ---
 
 ## 🔄 Rebuilding After Code Changes
 
-If you change backend or frontend code:
-
 ```bash
-docker compose up --build
+docker compose -f docker-compose-microservices.yml up --build
 ```
 
-If you only changed frontend:
+Force clean rebuild (no cache):
 
 ```bash
-docker compose up --build frontend
+docker compose -f docker-compose-microservices.yml up --build --no-cache
 ```
 
 ---
 
-## 🗄 Database Migrations (Alembic)
+## 🧪 Running Tests
 
-To run migrations inside the backend container:
-
-```bash
-docker compose exec backend alembic upgrade head
-```
-
-To create a new migration after changing models:
+Make sure Docker is running first, then from the project root:
 
 ```bash
-docker compose exec backend alembic revision --autogenerate -m "describe your change"
+bash tests/curl/signup/test_signup.sh
+bash tests/curl/dashboard/test_dashboard.sh
 ```
 
 ---
 
 ## 📄 License
 
-Advanced Software Engineering, York University, Summer 2026.
+Advanced Software Engineering (EECS 4314), York University, Summer 2026.
