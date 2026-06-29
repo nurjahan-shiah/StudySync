@@ -64,7 +64,7 @@ function WelcomeModal({ name, role, onContinue }: { name: string; role: Role; on
         </p>
         <p style={{ color: "var(--text2)", fontSize: "0.82rem", marginBottom: 28 }}>{roleInfo.desc}</p>
         <button onClick={onContinue} className="ss-btn-primary" style={{ width: "100%", justifyContent: "center", padding: "13px" }}>
-          Go to Dashboard →
+          Go to Dashboard
         </button>
       </div>
     </div>
