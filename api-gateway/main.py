@@ -45,6 +45,9 @@ SERVICE_URLS = {
 PUBLIC_ROUTES = {
     "/auth/register",
     "/auth/login",
+    "/auth/refresh",
+    "/auth/logout",
+    "/auth/health",
     "/",
     "/docs",
     "/openapi.json",
@@ -75,6 +78,7 @@ async def lifespan(app: FastAPI):
     yield
     print("🛑 API Gateway shutting down...")
 
+
 app = FastAPI(
     title="StudySync API Gateway",
     description="Routes requests to StudySync microservices",
@@ -84,7 +88,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()],
+    allow_origins=[
+        o.strip()
+        for o in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:3000"
+        ).split(",")
+        if o.strip()
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,19 +112,28 @@ def get_service_for_route(path: str) -> str:
     Specific sub-paths take priority over the generic prefix match.
     """
     import re
+
     # /groups/{id}/resources[/*] → resources-service
     if re.match(r"^/groups/[^/]+/resources(/.*)?$", path):
         return "resources"
+
     # /groups/{id}/sessions[/*] → sessions-service (session routes live there, not in groups-service)
     if re.match(r"^/groups/[^/]+/sessions(/.*)?$", path):
         return "sessions"
+
     # /groups/{id}/announcements[/*] → announcements-service
     if re.match(r"^/groups/[^/]+/announcements(/.*)?$", path):
         return "announcements"
+
     for route_prefix, service in ROUTE_MAPPING.items():
         if path.startswith(route_prefix):
             return service
-    raise HTTPException(status_code=404, detail="Route not found")
+
+    raise HTTPException(
+        status_code=404,
+        detail="Route not found"
+    )
+
 
 async def forward_request(
     service: str,
@@ -126,16 +146,20 @@ async def forward_request(
     Forward HTTP request to a microservice and return response.
     """
     service_url = SERVICE_URLS.get(service)
+
     if not service_url:
-        raise HTTPException(status_code=500, detail=f"Service {service} not configured")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Service {service} not configured"
+        )
 
     # Build full URL to forward
     target_url = f"{service_url}{path}"
-    
+
     # Prepare headers (forward auth header if present)
     headers = dict(request.headers)
     headers.pop("host", None)  # Remove host header (service will set its own)
-    
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.request(
@@ -145,24 +169,28 @@ async def forward_request(
                 content=body,
                 params=request.query_params,
             )
-            
+
             return {
                 "status_code": response.status_code,
                 "headers": dict(response.headers),
                 "content": response.content,
             }
+
     except httpx.ConnectError:
         raise HTTPException(
             status_code=503,
             detail=f"Service {service} is unavailable"
         )
+
     except httpx.TimeoutException:
         raise HTTPException(
             status_code=504,
             detail=f"Service {service} timeout"
         )
+
     except Exception as e:
         print(f"Error forwarding to {service}: {str(e)}")
+
         raise HTTPException(
             status_code=500,
             detail="Internal gateway error"
@@ -181,46 +209,61 @@ async def health():
         "services": list(SERVICE_URLS.keys())
     }
 
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+
+@app.api_route(
+    "/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"]
+)
 async def gateway(path: str, request: Request):
     """
     Main gateway route: accepts all HTTP methods and forwards to appropriate service.
-    
+
     Flow:
     1. Determine which service handles this route
     2. Check if authentication is required
     3. Forward request to service
     4. Return response back to client
     """
-    
+
     # Full path with query string
     full_path = f"/{path}"
+
     if request.query_params:
         full_path += f"?{request.query_params}"
-    
+
     # Get service for this route
     try:
         service = get_service_for_route(f"/{path}")
+
     except HTTPException:
         # If no service found, return 404
-        raise HTTPException(status_code=404, detail="Endpoint not found")
-    
+        raise HTTPException(
+            status_code=404,
+            detail="Endpoint not found"
+        )
+
     # Check if route requires authentication
     if full_path not in PUBLIC_ROUTES and not any(
-        full_path.startswith(pr) for pr in PUBLIC_ROUTES
+        full_path.startswith(pr)
+        for pr in PUBLIC_ROUTES
     ):
         # Most routes require auth - check for Bearer token
         auth_header = request.headers.get("authorization")
+
         if not auth_header:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Missing authorization header",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-    
+
     # Read request body if present
-    body = await request.body() if request.method != "GET" else None
-    
+    body = (
+        await request.body()
+        if request.method != "GET"
+        else None
+    )
+
     # Forward request to service
     response = await forward_request(
         service=service,
@@ -229,14 +272,27 @@ async def gateway(path: str, request: Request):
         request=request,
         body=body
     )
-    
+
     # Return response to client — proxy bytes directly to avoid re-serialization errors
-    excluded_headers = {"transfer-encoding", "content-encoding", "content-length"}
-    headers = {k: v for k, v in response["headers"].items() if k.lower() not in excluded_headers}
+    excluded_headers = {
+        "transfer-encoding",
+        "content-encoding",
+        "content-length"
+    }
+
+    headers = {
+        k: v
+        for k, v in response["headers"].items()
+        if k.lower() not in excluded_headers
+    }
+
     return Response(
         status_code=response["status_code"],
         content=response["content"],
-        media_type=response["headers"].get("content-type", "application/json"),
+        media_type=response["headers"].get(
+            "content-type",
+            "application/json"
+        ),
         headers=headers,
     )
 
@@ -245,13 +301,22 @@ async def gateway(path: str, request: Request):
 # ============================================================================
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
+async def http_exception_handler(
+    request: Request,
+    exc: HTTPException
+):
     """Handle HTTP exceptions."""
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail}
     )
 
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000
+    )
