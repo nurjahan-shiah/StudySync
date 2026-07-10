@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiClient } from "@/lib/apiClient";
 import Navbar from "../components/Navbar";
+import OnboardingCourses from "./OnboardingCourses";
 
 type Role = "student" | "group_leader" | "admin";
 
@@ -82,8 +83,10 @@ export default function SignupPage() {
   const [loading, setLoading]                 = useState(false);
   const [error, setError]                     = useState("");
   const [showWelcome, setShowWelcome]         = useState(false);
+  const [showOnboarding, setShowOnboarding]   = useState(false);
   const [registeredName, setRegisteredName]   = useState("");
   const [registeredRole, setRegisteredRole]   = useState<Role>("student");
+  const [registeredUserId, setRegisteredUserId] = useState("");
 
   const strength       = checkPassword(password);
   const passwordsMatch = password === confirmPassword && confirmPassword !== "";
@@ -111,7 +114,14 @@ export default function SignupPage() {
 
       setRegisteredName(name);
       setRegisteredRole(role);
-      setShowWelcome(true);
+      setRegisteredUserId(res.data!.user_id);
+
+      // US-G.5: only students/leaders enroll in courses — admins skip straight to welcome.
+      if (role === "student" || role === "group_leader") {
+        setShowOnboarding(true);
+      } else {
+        setShowWelcome(true);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -121,6 +131,13 @@ export default function SignupPage() {
 
   return (
     <>
+      {showOnboarding && (
+        <OnboardingCourses
+          userId={registeredUserId}
+          onDone={() => { setShowOnboarding(false); setShowWelcome(true); }}
+        />
+      )}
+
       {showWelcome && (
         <WelcomeModal
           name={registeredName}
