@@ -273,6 +273,130 @@ async def dashboard_summary(
 
 
 # ============================================================================
+# US-F.6 — Platform Analytics Overview (admin-only, aggregated from PostgreSQL)
+# ============================================================================
+
+@app.get("/admin/analytics/overview")
+async def analytics_overview(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_user),
+):
+    """Platform-wide usage stats for the admin analytics dashboard.
+
+    Aggregated live from PostgreSQL; moderation-aware (excludes soft-deleted
+    groups/resources/announcements)."""
+    from sqlalchemy import text
+    from datetime import timedelta
+
+    def scalar(sql, **params):
+        return int(db.execute(text(sql), params).scalar() or 0)
+
+    # Current Mon–Sun week window for "sessions scheduled this week".
+    now = datetime.utcnow()
+    start_of_week = (now - timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    end_of_week = start_of_week + timedelta(days=7)
+
+    total_users = db.query(User).count()
+    try:
+        active_users = scalar("SELECT COUNT(*) FROM users WHERE is_active = TRUE")
+    except Exception:
+        active_users = total_users
+
+    total_groups = scalar("SELECT COUNT(*) FROM groups WHERE is_deleted = FALSE")
+    active_groups = scalar(
+        "SELECT COUNT(*) FROM groups g WHERE g.is_deleted = FALSE AND ("
+        " EXISTS (SELECT 1 FROM study_sessions s WHERE s.group_id = g.id)"
+        " OR EXISTS (SELECT 1 FROM resources r WHERE r.group_id = g.id AND r.is_deleted = FALSE)"
+        " OR EXISTS (SELECT 1 FROM announcements a WHERE a.group_id = g.id AND a.is_deleted = FALSE))"
+    )
+    sessions_this_week = scalar(
+        "SELECT COUNT(*) FROM study_sessions "
+        "WHERE scheduled_at >= :start AND scheduled_at < :end "
+        "AND (is_cancelled IS NULL OR is_cancelled = FALSE)",
+        start=start_of_week, end=end_of_week,
+    )
+    total_resources = scalar("SELECT COUNT(*) FROM resources WHERE is_deleted = FALSE")
+    total_announcements = scalar("SELECT COUNT(*) FROM announcements WHERE is_deleted = FALSE")
+    total_tasks = scalar("SELECT COUNT(*) FROM tasks")
+
+    most_active_courses = [
+        {
+            "course_code": r["course_code"],
+            "course_name": r["course_name"],
+            "group_count": int(r["group_count"]),
+            "session_count": int(r["session_count"]),
+            "resource_count": int(r["resource_count"]),
+            "member_count": int(r["member_count"]),
+        }
+        for r in db.execute(text(
+            "SELECT * FROM ("
+            "  SELECT c.course_code, c.course_name,"
+            "    (SELECT COUNT(*) FROM group_courses gc WHERE gc.course_id = c.id) AS group_count,"
+            "    (SELECT COUNT(*) FROM study_sessions s WHERE s.group_id IN"
+            "       (SELECT group_id FROM group_courses WHERE course_id = c.id)) AS session_count,"
+            "    (SELECT COUNT(*) FROM resources r WHERE r.is_deleted = FALSE AND r.group_id IN"
+            "       (SELECT group_id FROM group_courses WHERE course_id = c.id)) AS resource_count,"
+            "    (SELECT COUNT(DISTINCT gm.user_id) FROM group_memberships gm WHERE gm.group_id IN"
+            "       (SELECT group_id FROM group_courses WHERE course_id = c.id)) AS member_count"
+            "  FROM courses c"
+            ") t WHERE t.group_count > 0"
+            " ORDER BY t.session_count DESC, t.group_count DESC LIMIT 5"
+        )).mappings().all()
+    ]
+
+    most_active_groups = [
+        {
+            "name": r["name"],
+            "member_count": int(r["member_count"]),
+            "session_count": int(r["session_count"]),
+            "resource_count": int(r["resource_count"]),
+        }
+        for r in db.execute(text(
+            "SELECT * FROM ("
+            "  SELECT g.name,"
+            "    (SELECT COUNT(*) FROM group_memberships gm WHERE gm.group_id = g.id) AS member_count,"
+            "    (SELECT COUNT(*) FROM study_sessions s WHERE s.group_id = g.id) AS session_count,"
+            "    (SELECT COUNT(*) FROM resources r WHERE r.group_id = g.id AND r.is_deleted = FALSE) AS resource_count"
+            "  FROM groups g WHERE g.is_deleted = FALSE"
+            ") t ORDER BY (t.session_count + t.resource_count) DESC, t.member_count DESC LIMIT 5"
+        )).mappings().all()
+    ]
+
+    recent_activity = [
+        {
+            "type": r["type"],
+            "title": r["title"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in db.execute(text(
+            "SELECT type, title, created_at FROM ("
+            "  SELECT 'group' AS type, name AS title, created_at FROM groups WHERE is_deleted = FALSE"
+            "  UNION ALL SELECT 'session', title, created_at FROM study_sessions"
+            "  UNION ALL SELECT 'resource', file_name, created_at FROM resources WHERE is_deleted = FALSE"
+            "  UNION ALL SELECT 'announcement', title, created_at FROM announcements WHERE is_deleted = FALSE"
+            "  UNION ALL SELECT 'task', title, created_at FROM tasks"
+            ") t ORDER BY created_at DESC LIMIT 10"
+        )).mappings().all()
+    ]
+
+    return {
+        "total_users": total_users,
+        "active_users": active_users,
+        "total_groups": total_groups,
+        "active_groups": active_groups,
+        "sessions_this_week": sessions_this_week,
+        "total_resources": total_resources,
+        "total_announcements": total_announcements,
+        "total_tasks": total_tasks,
+        "most_active_courses": most_active_courses,
+        "most_active_groups": most_active_groups,
+        "recent_activity": recent_activity,
+    }
+
+
+# ============================================================================
 # M4 — User list with search + filter
 # ============================================================================
 
