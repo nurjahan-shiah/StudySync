@@ -21,7 +21,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, status, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import Column, DateTime, String, Text
+from sqlalchemy import Column, DateTime, String, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Session
 
@@ -29,7 +29,7 @@ import sys
 
 sys.path.append("/shared")
 
-from shared_models import User, Course, Base
+from shared_models import User, Course, Group, Resource, Announcement, GroupMembership, Base
 from shared_database import engine, get_db
 from shared_auth import require_admin as require_admin_user
 from shared_schemas import CourseCreate, CourseResponse
@@ -66,6 +66,20 @@ class AdminAuditLog(Base):
     )
 
 
+# US-F.2 — dedicated moderation audit trail (who deleted what content, when, why)
+class ModerationLog(Base):
+    __tablename__ = "moderation_logs"
+
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    admin_id = Column(PG_UUID(as_uuid=True), nullable=False)
+    entity_type = Column(String(20), nullable=False)   # group | resource | announcement
+    entity_id = Column(String(255), nullable=False)
+    action = Column(String(50), nullable=False, default="delete")
+    reason = Column(Text, nullable=True)
+    target_title = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # ============================================================================
 # Lifespan
 # ============================================================================
@@ -98,10 +112,30 @@ def _ensure_is_active_column():
             conn.commit()
 
 
+def _ensure_soft_delete_columns():
+    """US-F.2: add moderation soft-delete columns to existing content tables.
+
+    create_all() only creates missing tables, never alters existing ones, so
+    long-lived groups/resources/announcements tables need these added explicitly.
+    Idempotent (ADD COLUMN IF NOT EXISTS)."""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        for table in ("groups", "resources", "announcements"):
+            conn.execute(text(
+                f"ALTER TABLE {table} "
+                "ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE, "
+                "ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP, "
+                "ADD COLUMN IF NOT EXISTS deleted_by UUID"
+            ))
+        conn.commit()
+
+
 async def lifespan(app: FastAPI):
     print("⚙️  Admin Service starting…")
     Base.metadata.create_all(bind=engine)
     _ensure_is_active_column()
+    _ensure_soft_delete_columns()
     yield
     print("🛑 Admin Service shutting down…")
 
@@ -163,6 +197,22 @@ def log_action(
     db.add(entry)
 
 
+def log_moderation(db, admin_id, entity_type, entity_id, action, reason, target_title):
+    """US-F.2: record a moderation action. Caller commits."""
+    entry = ModerationLog(
+        id=uuid4(),
+        admin_id=admin_id,
+        entity_type=entity_type,
+        entity_id=str(entity_id),
+        action=action,
+        reason=reason,
+        target_title=target_title,
+        created_at=datetime.utcnow(),
+    )
+    db.add(entry)
+    return entry
+
+
 # ============================================================================
 # Health
 # ============================================================================
@@ -220,6 +270,130 @@ async def dashboard_summary(
         deactivated_users=int(inactive),
         total_courses=total_courses,
     )
+
+
+# ============================================================================
+# US-F.6 — Platform Analytics Overview (admin-only, aggregated from PostgreSQL)
+# ============================================================================
+
+@app.get("/admin/analytics/overview")
+async def analytics_overview(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_user),
+):
+    """Platform-wide usage stats for the admin analytics dashboard.
+
+    Aggregated live from PostgreSQL; moderation-aware (excludes soft-deleted
+    groups/resources/announcements)."""
+    from sqlalchemy import text
+    from datetime import timedelta
+
+    def scalar(sql, **params):
+        return int(db.execute(text(sql), params).scalar() or 0)
+
+    # Current Mon–Sun week window for "sessions scheduled this week".
+    now = datetime.utcnow()
+    start_of_week = (now - timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    end_of_week = start_of_week + timedelta(days=7)
+
+    total_users = db.query(User).count()
+    try:
+        active_users = scalar("SELECT COUNT(*) FROM users WHERE is_active = TRUE")
+    except Exception:
+        active_users = total_users
+
+    total_groups = scalar("SELECT COUNT(*) FROM groups WHERE is_deleted = FALSE")
+    active_groups = scalar(
+        "SELECT COUNT(*) FROM groups g WHERE g.is_deleted = FALSE AND ("
+        " EXISTS (SELECT 1 FROM study_sessions s WHERE s.group_id = g.id)"
+        " OR EXISTS (SELECT 1 FROM resources r WHERE r.group_id = g.id AND r.is_deleted = FALSE)"
+        " OR EXISTS (SELECT 1 FROM announcements a WHERE a.group_id = g.id AND a.is_deleted = FALSE))"
+    )
+    sessions_this_week = scalar(
+        "SELECT COUNT(*) FROM study_sessions "
+        "WHERE scheduled_at >= :start AND scheduled_at < :end "
+        "AND (is_cancelled IS NULL OR is_cancelled = FALSE)",
+        start=start_of_week, end=end_of_week,
+    )
+    total_resources = scalar("SELECT COUNT(*) FROM resources WHERE is_deleted = FALSE")
+    total_announcements = scalar("SELECT COUNT(*) FROM announcements WHERE is_deleted = FALSE")
+    total_tasks = scalar("SELECT COUNT(*) FROM tasks")
+
+    most_active_courses = [
+        {
+            "course_code": r["course_code"],
+            "course_name": r["course_name"],
+            "group_count": int(r["group_count"]),
+            "session_count": int(r["session_count"]),
+            "resource_count": int(r["resource_count"]),
+            "member_count": int(r["member_count"]),
+        }
+        for r in db.execute(text(
+            "SELECT * FROM ("
+            "  SELECT c.course_code, c.course_name,"
+            "    (SELECT COUNT(*) FROM group_courses gc WHERE gc.course_id = c.id) AS group_count,"
+            "    (SELECT COUNT(*) FROM study_sessions s WHERE s.group_id IN"
+            "       (SELECT group_id FROM group_courses WHERE course_id = c.id)) AS session_count,"
+            "    (SELECT COUNT(*) FROM resources r WHERE r.is_deleted = FALSE AND r.group_id IN"
+            "       (SELECT group_id FROM group_courses WHERE course_id = c.id)) AS resource_count,"
+            "    (SELECT COUNT(DISTINCT gm.user_id) FROM group_memberships gm WHERE gm.group_id IN"
+            "       (SELECT group_id FROM group_courses WHERE course_id = c.id)) AS member_count"
+            "  FROM courses c"
+            ") t WHERE t.group_count > 0"
+            " ORDER BY t.session_count DESC, t.group_count DESC LIMIT 5"
+        )).mappings().all()
+    ]
+
+    most_active_groups = [
+        {
+            "name": r["name"],
+            "member_count": int(r["member_count"]),
+            "session_count": int(r["session_count"]),
+            "resource_count": int(r["resource_count"]),
+        }
+        for r in db.execute(text(
+            "SELECT * FROM ("
+            "  SELECT g.name,"
+            "    (SELECT COUNT(*) FROM group_memberships gm WHERE gm.group_id = g.id) AS member_count,"
+            "    (SELECT COUNT(*) FROM study_sessions s WHERE s.group_id = g.id) AS session_count,"
+            "    (SELECT COUNT(*) FROM resources r WHERE r.group_id = g.id AND r.is_deleted = FALSE) AS resource_count"
+            "  FROM groups g WHERE g.is_deleted = FALSE"
+            ") t ORDER BY (t.session_count + t.resource_count) DESC, t.member_count DESC LIMIT 5"
+        )).mappings().all()
+    ]
+
+    recent_activity = [
+        {
+            "type": r["type"],
+            "title": r["title"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in db.execute(text(
+            "SELECT type, title, created_at FROM ("
+            "  SELECT 'group' AS type, name AS title, created_at FROM groups WHERE is_deleted = FALSE"
+            "  UNION ALL SELECT 'session', title, created_at FROM study_sessions"
+            "  UNION ALL SELECT 'resource', file_name, created_at FROM resources WHERE is_deleted = FALSE"
+            "  UNION ALL SELECT 'announcement', title, created_at FROM announcements WHERE is_deleted = FALSE"
+            "  UNION ALL SELECT 'task', title, created_at FROM tasks"
+            ") t ORDER BY created_at DESC LIMIT 10"
+        )).mappings().all()
+    ]
+
+    return {
+        "total_users": total_users,
+        "active_users": active_users,
+        "total_groups": total_groups,
+        "active_groups": active_groups,
+        "sessions_this_week": sessions_this_week,
+        "total_resources": total_resources,
+        "total_announcements": total_announcements,
+        "total_tasks": total_tasks,
+        "most_active_courses": most_active_courses,
+        "most_active_groups": most_active_groups,
+        "recent_activity": recent_activity,
+    }
 
 
 # ============================================================================
@@ -607,6 +781,192 @@ async def get_audit_log(
             ),
         }
         for entry in logs
+    ]
+
+
+# ============================================================================
+# US-F.2 — Moderation Console & Audit Log
+# ============================================================================
+
+def _user_name(db: Session, user_id) -> str:
+    u = db.query(User).filter(User.id == user_id).first()
+    return u.name if u else "Unknown"
+
+
+def _group_name(db: Session, group_id) -> str:
+    g = db.query(Group).filter(Group.id == group_id).first()
+    return g.name if g else "Unknown group"
+
+
+@app.get("/admin/moderation/groups")
+async def moderation_groups(
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_user),
+):
+    q = db.query(Group).filter(Group.is_deleted == False)  # noqa: E712
+    if search:
+        q = q.filter(Group.name.ilike(f"%{search}%"))
+    groups = q.order_by(Group.created_at.desc()).all()
+    return [
+        {
+            "id": str(g.id),
+            "name": g.name,
+            "description": g.description,
+            "created_by": str(g.created_by),
+            "creator_name": _user_name(db, g.created_by),
+            "member_count": db.query(GroupMembership).filter(GroupMembership.group_id == g.id).count(),
+            "created_at": g.created_at.isoformat() if g.created_at else None,
+        }
+        for g in groups
+    ]
+
+
+@app.get("/admin/moderation/resources")
+async def moderation_resources(
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_user),
+):
+    q = db.query(Resource).filter(Resource.is_deleted == False)  # noqa: E712
+    if search:
+        q = q.filter(Resource.file_name.ilike(f"%{search}%"))
+    resources = q.order_by(Resource.created_at.desc()).all()
+    return [
+        {
+            "id": str(r.id),
+            "file_name": r.file_name,
+            "file_type": r.file_type,
+            "uploaded_by": str(r.uploaded_by),
+            "uploader_name": _user_name(db, r.uploaded_by),
+            "group_id": str(r.group_id),
+            "group_name": _group_name(db, r.group_id),
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in resources
+    ]
+
+
+@app.get("/admin/moderation/announcements")
+async def moderation_announcements(
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_user),
+):
+    q = db.query(Announcement).filter(Announcement.is_deleted == False)  # noqa: E712
+    if search:
+        q = q.filter(Announcement.title.ilike(f"%{search}%"))
+    anns = q.order_by(Announcement.created_at.desc()).all()
+    return [
+        {
+            "id": str(a.id),
+            "title": a.title,
+            "message": a.message,
+            "author_id": str(a.author_id),
+            "author_name": _user_name(db, a.author_id),
+            "group_id": str(a.group_id),
+            "group_name": _group_name(db, a.group_id),
+            "is_pinned": a.is_pinned,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in anns
+    ]
+
+
+# entity name -> (model, title attribute)
+_MODERATION_ENTITIES = {
+    "group": (Group, "name"),
+    "resource": (Resource, "file_name"),
+    "announcement": (Announcement, "title"),
+}
+
+
+@app.delete("/admin/moderation/{entity}/{item_id}")
+async def moderation_delete(
+    entity: str,
+    item_id: str,
+    reason: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_user),
+):
+    """Soft-delete any group / resource / announcement and record it in the audit log."""
+    if entity not in _MODERATION_ENTITIES:
+        raise HTTPException(status_code=400, detail="Invalid entity. Use group, resource, or announcement.")
+
+    model, title_attr = _MODERATION_ENTITIES[entity]
+    item = db.query(model).filter(model.id == item_id).first()
+    if not item or item.is_deleted:
+        raise HTTPException(status_code=404, detail=f"{entity.capitalize()} not found")
+
+    target_title = getattr(item, title_attr, None)
+    item.is_deleted = True
+    item.deleted_at = datetime.utcnow()
+    item.deleted_by = current_user["user_id"]
+
+    entry = log_moderation(
+        db, current_user["user_id"], entity, item_id, "delete", reason, target_title,
+    )
+    db.commit()
+
+    return {"message": f"{entity.capitalize()} deleted successfully", "log_id": str(entry.id)}
+
+
+@app.post("/admin/moderation/{entity}/{item_id}/restore")
+async def moderation_restore(
+    entity: str,
+    item_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_user),
+):
+    """Revert a soft-delete: make the item visible again and record the restore."""
+    if entity not in _MODERATION_ENTITIES:
+        raise HTTPException(status_code=400, detail="Invalid entity. Use group, resource, or announcement.")
+
+    model, title_attr = _MODERATION_ENTITIES[entity]
+    item = db.query(model).filter(model.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail=f"{entity.capitalize()} not found")
+    if not item.is_deleted:
+        raise HTTPException(status_code=400, detail=f"{entity.capitalize()} is not currently deleted")
+
+    target_title = getattr(item, title_attr, None)
+    item.is_deleted = False
+    item.deleted_at = None
+    item.deleted_by = None
+
+    entry = log_moderation(
+        db, current_user["user_id"], entity, item_id, "restore", None, target_title,
+    )
+    db.commit()
+
+    return {"message": f"{entity.capitalize()} restored successfully", "log_id": str(entry.id)}
+
+
+@app.get("/admin/moderation/audit-logs")
+async def moderation_audit_logs(
+    limit: int = Query(100, le=500),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin_user),
+):
+    logs = (
+        db.query(ModerationLog)
+        .order_by(ModerationLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": str(e.id),
+            "admin_id": str(e.admin_id),
+            "admin_name": _user_name(db, e.admin_id),
+            "entity_type": e.entity_type,
+            "entity_id": e.entity_id,
+            "action": e.action,
+            "reason": e.reason,
+            "target_title": e.target_title,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in logs
     ]
 
 
