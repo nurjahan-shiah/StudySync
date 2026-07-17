@@ -372,3 +372,8 @@ export const summarizeSession = (sessionId: string, notes: string) =>
     `/sessions/${sessionId}/summarize?notes=${encodeURIComponent(notes)}`,
     {}
   );
+// US-G.1 @author: Uzma Alam
+export const explainRecommendation = (groupId: string) =>
+  apiClient.get<{ group_id: string; group_name: string; score: number; explanation: string }>(
+    `/recommendations/${groupId}/explain`
+  );
