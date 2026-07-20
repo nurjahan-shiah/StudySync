@@ -337,6 +337,7 @@ services:
       - api-gateway
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      CORS_ORIGINS: https://adelaide-sphere-deals-costumes.trycloudflare.com
       NODE_ENV: production
     networks:
       - studysync-network

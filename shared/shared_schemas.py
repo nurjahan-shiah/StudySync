@@ -95,6 +95,7 @@ class GroupBase(BaseModel):
     name: str
     description: Optional[str] = None
     is_public: bool = True
+    intended_major: Optional[str] = None
 
 class GroupCreate(GroupBase):
     course_ids: Optional[List[UUID]] = []
@@ -103,6 +104,7 @@ class GroupUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_public: Optional[bool] = None
+    intended_major: Optional[str] = None
 
 class GroupResponse(GroupBase):
     id: UUID
