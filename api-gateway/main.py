@@ -377,6 +377,7 @@ async def get_all_service_health():
         "PUT",
         "DELETE",
         "PATCH",
+        "OPTIONS",
     ],
 )
 async def gateway(
@@ -392,7 +393,16 @@ async def gateway(
     3. Forward the request to the service.
     4. Return the service response to the client.
     """
-    full_path = f"/{path}"
+    # CORSMiddleware normally intercepts preflight OPTIONS requests before
+    # they ever reach route handlers. As a defensive fallback (in case that
+    # interception doesn't happen for some reason, e.g. a missing
+    # Access-Control-Request-Method header), answer OPTIONS directly here
+    # with an empty 200 — CORSMiddleware still attaches the correct
+    # Access-Control-* headers on the way out since it wraps every response.
+    if request.method == "OPTIONS":
+        return Response(status_code=200)
+
+    full_path = re.sub(r"/{2,}", "/", f"/{path}")
 
     try:
         service = get_service_for_route(full_path)
