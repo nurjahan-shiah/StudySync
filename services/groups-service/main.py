@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     print("🛑 Groups Service shutting down...")
 
 app = FastAPI(
-    title="StudySync Groups Service",
+    title="StudySynq Groups Service",
     description="Study group management",
     version="1.0.0",
     lifespan=lifespan

@@ -47,7 +47,7 @@ def validate_resource_metadata(file_name: str, file_url: str, file_type: str) ->
         if not file_url.startswith(expected_prefix):
             raise HTTPException(
                 status_code=422,
-                detail="File URL must point to StudySync storage",
+                detail="File URL must point to StudySynq storage",
             )
 
 
@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
     yield
     print("🛑 Resources Service shutting down...")
 
-app = FastAPI(title="StudySync Resources Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="StudySynq Resources Service", version="1.0.0", lifespan=lifespan)
 
 @app.get("/resources/health")
 async def health():

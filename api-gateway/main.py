@@ -1,6 +1,6 @@
 """
 api-gateway/main.py
-API Gateway for StudySync microservices.
+API Gateway for StudySynq microservices.
 Single entry point (port 8000) that routes requests to individual services.
 Frontend connects only to this gateway.
 
@@ -108,8 +108,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="StudySync API Gateway",
-    description="Routes requests to StudySync microservices",
+    title="StudySynq API Gateway",
+    description="Routes requests to StudySynq microservices",
     version="1.1.0",
     lifespan=lifespan,
 )

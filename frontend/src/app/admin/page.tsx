@@ -139,7 +139,7 @@ export default function AdminDashboard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `studysync-${kind}.csv`;
+    a.download = `studysynq-${kind}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }, []);
@@ -247,7 +247,7 @@ export default function AdminDashboard() {
           color: "#1d4ed8", display: "flex", alignItems: "center",
           justifyContent: "center", fontWeight: 700, fontSize: 14,
         }}>S</div>
-        <span style={{ fontWeight: 600, fontSize: 15, color: "#111" }}>StudySync</span>
+        <span style={{ fontWeight: 600, fontSize: 15, color: "#111" }}>StudySynq</span>
         <span style={{ color: "#9ca3af", fontSize: 13, marginLeft: 4 }}>/</span>
         <span style={{ fontSize: 13, color: "#6b7280" }}>Admin Console</span>
         <div style={{ flex: 1 }} />

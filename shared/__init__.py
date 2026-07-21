@@ -1,5 +1,5 @@
 """
-Shared utilities for all StudySync microservices.
+Shared utilities for all StudySynq microservices.
 Each service imports from here to avoid code duplication.
 """
 from .models import *

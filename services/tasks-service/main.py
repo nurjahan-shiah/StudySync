@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     print("🛑 Tasks Service shutting down...")
 
 
-app = FastAPI(title="StudySync Tasks Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="StudySynq Tasks Service", version="1.0.0", lifespan=lifespan)
 
 
 # ----------------------------------------------------------------------------

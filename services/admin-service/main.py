@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="StudySync Admin Service",
+    title="StudySynq Admin Service",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -834,7 +834,7 @@ async def export_users_csv(
     db.commit()
     return _csv_response(
         ["id", "name", "email", "role", "is_active", "created_at"],
-        rows, "studysync-users.csv",
+        rows, "studysynq-users.csv",
     )
 
 
@@ -853,7 +853,7 @@ async def export_courses_csv(
     db.commit()
     return _csv_response(
         ["id", "course_code", "course_name", "department"],
-        rows, "studysync-courses.csv",
+        rows, "studysynq-courses.csv",
     )
 
 

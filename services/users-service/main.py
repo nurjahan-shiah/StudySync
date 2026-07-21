@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     print("🛑 Users Service shutting down...")
 
 app = FastAPI(
-    title="StudySync Users Service",
+    title="StudySynq Users Service",
     description="User profile and enrollment management",
     version="1.0.0",
     lifespan=lifespan
@@ -147,7 +147,7 @@ async def suggest_onboarding_courses(
     US-G.5 — AI Onboarding Course Suggestions (extends US-A.1)
 
     Given a student's program and year, ask an LLM to pick the courses from
-    StudySync's own catalogue that a student in that program/year is most
+    StudySynq's own catalogue that a student in that program/year is most
     likely enrolled in. The model is only allowed to choose from the real
     course_code values passed in — this stops it from hallucinating courses
     that don't exist in our catalogue.
@@ -180,7 +180,7 @@ async def suggest_onboarding_courses(
                         "messages": [
                             {
                                 "role": "user",
-                                "content": f"""A student has just signed up for StudySync.
+                                "content": f"""A student has just signed up for StudySynq.
 Program: {body.program}
 Year: {body.year}
 

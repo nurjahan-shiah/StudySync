@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
     print("🛑 Announcements Service shutting down...")
 
 
-app = FastAPI(title="StudySync Announcements Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="StudySynq Announcements Service", version="1.0.0", lifespan=lifespan)
 
 
 class AnnouncementAIDraftRequest(BaseModel):

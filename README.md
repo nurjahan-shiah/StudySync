@@ -1,7 +1,7 @@
 # StudySynq 📚
 > A university-focused study group and collaboration platform - built for students, by students.
 
-StudySync helps university students connect with classmates, organize study sessions, share resources, and collaborate on courses. Think Google Classroom meets Discord study servers, but purpose-built for student-led course collaboration.
+StudySynq helps university students connect with classmates, organize study sessions, share resources, and collaborate on courses. Think Google Classroom meets Discord study servers, but purpose-built for student-led course collaboration.
 
 ---
 
@@ -44,7 +44,7 @@ StudySync helps university students connect with classmates, organize study sess
 ## 📁 Project Structure
 
 ```
-StudySync/
+StudySynq/
 ├── api-gateway/              # Routes requests to microservices
 ├── services/
 │   ├── auth-service/         # Registration, login, JWT
@@ -101,8 +101,8 @@ StudySync/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/nurjahan-shiah/StudySync/
-cd StudySync
+git clone https://github.com/nurjahan-shiah/StudySynq/
+cd StudySynq
 ```
 
 ---
@@ -119,7 +119,7 @@ Open `.env` and configure:
 # Database
 POSTGRES_USER=admin
 POSTGRES_PASSWORD=secret
-POSTGRES_DB=studysync
+POSTGRES_DB=studysynq
 
 # Auth
 SECRET_KEY=your-secret-key-here
@@ -142,10 +142,10 @@ This starts all containers:
 
 | Container | Description | Port |
 |---|---|---|
-| `studysync-gateway` | API Gateway | `8000` |
-| `studysync-auth` | Auth service | `8001` |
-| `studysync-db` | PostgreSQL | `5432` |
-| `studysync-frontend` | Next.js frontend | `3000` |
+| `studysynq-gateway` | API Gateway | `8000` |
+| `studysynq-auth` | Auth service | `8001` |
+| `studysynq-db` | PostgreSQL | `5432` |
+| `studysynq-frontend` | Next.js frontend | `3000` |
 
 ---
 

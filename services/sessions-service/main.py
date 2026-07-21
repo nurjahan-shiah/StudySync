@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     yield
     print("Sessions Service shutting down...")
 
-app = FastAPI(title="StudySync Sessions Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="StudySynq Sessions Service", version="1.0.0", lifespan=lifespan)
 
 @app.get("/sessions/health")
 async def health():

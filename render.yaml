@@ -1,4 +1,4 @@
-# render.yaml — Render Blueprint for StudySync backend
+# render.yaml — Render Blueprint for StudySynq backend
 #
 # Deploys: API gateway + 11 FastAPI microservices (free web services) and
 # the ETL/recommender pipeline (free background worker).

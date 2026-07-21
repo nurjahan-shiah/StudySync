@@ -67,7 +67,7 @@ function WelcomeModal({ name, role, onContinue }: { name: string; role: Role; on
       }}>
         <div style={{ fontSize: "3rem", marginBottom: 16 }}>{roleInfo.icon}</div>
         <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-          Welcome to StudySync, {name.split(" ")[0]}!
+          Welcome to StudySynq, {name.split(" ")[0]}!
         </h2>
         <p style={{ color: "var(--text2)", fontSize: "0.9rem", marginBottom: 6 }}>
           Your account has been created as a{" "}
@@ -324,7 +324,7 @@ export default function SignupPage() {
               Create your account
             </h1>
             <p style={{ color: "var(--text2)", fontSize: "0.92rem" }}>
-              Join StudySync to collaborate with your classmates.
+              Join StudySynq to collaborate with your classmates.
             </p>
           </div>
 
@@ -439,7 +439,7 @@ export default function SignupPage() {
             </form>
 
             <p style={{ fontSize: "0.78rem", color: "var(--text2)", textAlign: "center", marginTop: 20 }}>
-              By signing up, you agree to StudySync&apos;s{" "}
+              By signing up, you agree to StudySynq&apos;s{" "}
               <Link href="#" style={{ color: "var(--ss-red)" }}>terms of service</Link>.
             </p>
           </div>

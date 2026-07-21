@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker, Session
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://admin:secret@db:5432/studysync"
+    "postgresql://admin:secret@db:5432/studysynq"
 )
 
 # Connection pool: min 5 connections, max 20

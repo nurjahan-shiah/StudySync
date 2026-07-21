@@ -1,5 +1,5 @@
 /**
- * API Client for StudySync Frontend
+ * API Client for StudySynq Frontend
  * Connects to API Gateway (port 8000)
  */
 

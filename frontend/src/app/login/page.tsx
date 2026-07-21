@@ -123,7 +123,7 @@ export default function LoginPage() {
             marginBottom: '8px',
           }}
         >
-          Log in to StudySync
+          Log in to StudySynq
         </h1>
 
         <p
@@ -166,7 +166,7 @@ export default function LoginPage() {
 
           <input
             id="login-email"
-            name="studysync-login-email"
+            name="studysynq-login-email"
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -198,7 +198,7 @@ export default function LoginPage() {
 
           <input
             id="login-password"
-            name="studysync-login-password"
+            name="studysynq-login-password"
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}

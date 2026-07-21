@@ -346,5 +346,5 @@ def require_roles(*allowed_roles: str):
     return role_dependency
 
 
-# Reusable dependencies for common StudySync role combinations
+# Reusable dependencies for common StudySynq role combinations
 require_admin = require_roles("admin")

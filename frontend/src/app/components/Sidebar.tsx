@@ -372,7 +372,7 @@ function ProfilePanel({
             textAlign: 'center',
           }}
         >
-          StudySync · York University · 2026
+          StudySynq · York University · 2026
         </p>
       </div>
     </div>

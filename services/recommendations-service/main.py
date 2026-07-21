@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     yield
     print("🛑 Recommendations Service shutting down...")
 
-app = FastAPI(title="StudySync Recommendations Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="StudySynq Recommendations Service", version="1.0.0", lifespan=lifespan)
 
 @app.get("/recommendations/health")
 async def health():

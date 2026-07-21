@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="StudySync Courses Service",
+    title="StudySynq Courses Service",
     version="1.0.0",
     lifespan=lifespan
 )

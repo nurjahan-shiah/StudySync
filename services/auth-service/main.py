@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="StudySync Auth Service",
+    title="StudySynq Auth Service",
     description="User authentication and JWT token management",
     version="1.0.0",
     lifespan=lifespan

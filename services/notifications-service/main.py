@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
     print("Notifications Service shutting down...")
 
 
-app = FastAPI(title="StudySync Notifications Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="StudySynq Notifications Service", version="1.0.0", lifespan=lifespan)
 
 
 # ----------------------------------------------------------------------------
@@ -216,7 +216,7 @@ async def seed_demo_notifications(
          "Prepare slides for chapter 4.", "/dashboard"),
         (NotificationType.RESOURCE.value, "New resource shared",
          "lecture-notes-week3.pdf was added to your group.", "/resources"),
-        (NotificationType.SYSTEM.value, "Welcome to StudySync",
+        (NotificationType.SYSTEM.value, "Welcome to StudySynq",
          "Your Notification Centre is ready.", "/dashboard"),
     ]
     created: List[Notification] = []

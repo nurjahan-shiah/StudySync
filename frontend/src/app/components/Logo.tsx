@@ -1,6 +1,6 @@
 /**
  * components/Logo.tsx
- * Reusable StudySync logo — icon + wordmark.
+ * Reusable StudySynq logo — icon + wordmark.
  * Used on every page/navbar. Single source of truth for the brand.
  */
 
@@ -64,12 +64,12 @@ export function LogoIcon({ size = 36 }: { size?: number }) {
   );
 }
 
-/** "study" + red "Sync" text */
+/** "study" + red "Synq" text */
 export function LogoWordmark({ size = "1.3rem" }: { size?: string }) {
   return (
     <span style={{ fontSize: size, fontWeight: 700, letterSpacing: "-0.5px" }}>
       <span style={{ color: "var(--text)" }}>study</span>
-      <span style={{ color: "var(--ss-red)" }}>Sync</span>
+      <span style={{ color: "var(--ss-red)" }}>Synq</span>
     </span>
   );
 }
