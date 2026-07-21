@@ -23,7 +23,7 @@
 services:
   # ── API Gateway ────────────────────────────────────────────────────────
   - type: web
-    name: studysync-gateway
+    name: studysynq-gateway
     runtime: docker
     plan: free
     dockerContext: ./api-gateway
@@ -39,31 +39,31 @@ services:
       - key: CORS_ORIGINS
         sync: false
       - key: AUTH_SERVICE_URL
-        value: http://studysync-auth:8001
+        value: http://studysynq-auth:8001
       - key: USERS_SERVICE_URL
-        value: http://studysync-users:8002
+        value: http://studysynq-users:8002
       - key: GROUPS_SERVICE_URL
-        value: http://studysync-groups:8003
+        value: http://studysynq-groups:8003
       - key: SESSIONS_SERVICE_URL
-        value: http://studysync-sessions:8004
+        value: http://studysynq-sessions:8004
       - key: RESOURCES_SERVICE_URL
-        value: http://studysync-resources:8005
+        value: http://studysynq-resources:8005
       - key: COURSES_SERVICE_URL
-        value: http://studysync-courses:8006
+        value: http://studysynq-courses:8006
       - key: ADMIN_SERVICE_URL
-        value: http://studysync-admin:8007
+        value: http://studysynq-admin:8007
       - key: RECOMMENDATIONS_SERVICE_URL
-        value: http://studysync-recommendations:8008
+        value: http://studysynq-recommendations:8008
       - key: NOTIFICATIONS_SERVICE_URL
-        value: http://studysync-notifications:8009
+        value: http://studysynq-notifications:8009
       - key: ANNOUNCEMENTS_SERVICE_URL
-        value: http://studysync-announcements:8010
+        value: http://studysynq-announcements:8010
       - key: TASKS_SERVICE_URL
-        value: http://studysync-tasks:8011
+        value: http://studysynq-tasks:8011
 
   # ── Auth Service (US-A.1/A.2) ─────────────────────────────────────────
   - type: web
-    name: studysync-auth
+    name: studysynq-auth
     runtime: docker
     plan: free
     dockerContext: .
@@ -89,7 +89,7 @@ services:
 
   # ── Users Service (US-G.5) ────────────────────────────────────────────
   - type: web
-    name: studysync-users
+    name: studysynq-users
     runtime: docker
     plan: free
     dockerContext: .
@@ -109,7 +109,7 @@ services:
 
   # ── Groups Service ─────────────────────────────────────────────────────
   - type: web
-    name: studysync-groups
+    name: studysynq-groups
     runtime: docker
     plan: free
     dockerContext: .
@@ -127,7 +127,7 @@ services:
 
   # ── Sessions Service ────────────────────────────────────────────────────
   - type: web
-    name: studysync-sessions
+    name: studysynq-sessions
     runtime: docker
     plan: free
     dockerContext: .
@@ -147,7 +147,7 @@ services:
 
   # ── Resources Service (US-D.1) ────────────────────────────────────────
   - type: web
-    name: studysync-resources
+    name: studysynq-resources
     runtime: docker
     plan: free
     dockerContext: .
@@ -173,7 +173,7 @@ services:
 
   # ── Courses Service ─────────────────────────────────────────────────────
   - type: web
-    name: studysync-courses
+    name: studysynq-courses
     runtime: docker
     plan: free
     dockerContext: .
@@ -191,7 +191,7 @@ services:
 
   # ── Admin Service (US-F.1) ────────────────────────────────────────────
   - type: web
-    name: studysync-admin
+    name: studysynq-admin
     runtime: docker
     plan: free
     dockerContext: .
@@ -209,7 +209,7 @@ services:
 
   # ── Recommendations Service (US-F.4) ──────────────────────────────────
   - type: web
-    name: studysync-recommendations
+    name: studysynq-recommendations
     runtime: docker
     plan: free
     dockerContext: .
@@ -229,7 +229,7 @@ services:
 
   # ── Notifications Service ───────────────────────────────────────────────
   - type: web
-    name: studysync-notifications
+    name: studysynq-notifications
     runtime: docker
     plan: free
     dockerContext: .
@@ -247,7 +247,7 @@ services:
 
   # ── Announcements Service (US-E.2) ──────────────────────────────────────
   - type: web
-    name: studysync-announcements
+    name: studysynq-announcements
     runtime: docker
     plan: free
     dockerContext: .
@@ -267,7 +267,7 @@ services:
 
   # ── Tasks Service ───────────────────────────────────────────────────────
   - type: web
-    name: studysync-tasks
+    name: studysynq-tasks
     runtime: docker
     plan: free
     dockerContext: .
@@ -290,12 +290,12 @@ services:
 #   1. vercel.com → New Project → import this repo.
 #   2. Root Directory: frontend
 #   3. Environment variables:
-#        NEXT_PUBLIC_API_URL          = https://studysync-gateway.onrender.com
+#        NEXT_PUBLIC_API_URL          = https://studysynq-gateway.onrender.com
 #        NEXT_PUBLIC_SUPABASE_URL     = <your Supabase project URL>
 #        NEXT_PUBLIC_SUPABASE_ANON_KEY = <your Supabase anon key>
 #        NEXT_PUBLIC_SUPABASE_BUCKET  = resources
 #   4. Deploy. Vercel auto-detects Next.js — no Dockerfile needed there.
 #   5. Back in Render, set the gateway's CORS to allow the Vercel domain
-#      (add a CORS_ORIGINS env var to studysync-gateway if the gateway
+#      (add a CORS_ORIGINS env var to studysynq-gateway if the gateway
 #      code reads one — check api-gateway/main.py's CORSMiddleware config).
 # ─────────────────────────────────────────────────────────────────────────
