@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException, status, Depends, Body
 from sqlalchemy.orm import Session
 from typing import List
 from contextlib import asynccontextmanager
+from pydantic import BaseModel
 
 # Import shared utilities
 import sys
@@ -71,9 +72,6 @@ def _get_membership(db: Session, group_id: UUID, user_id):
 
 
 def _require_group_manager(db: Session, group_id: UUID, current_user):
-    if current_user["role"] == "admin":
-        return
-
     membership = _get_membership(db, group_id, current_user["user_id"])
     if not (membership and membership.role == GroupMembershipRole.LEADER):
         raise HTTPException(
@@ -87,6 +85,11 @@ def _leader_count(db: Session, group_id: UUID) -> int:
         GroupMembership.group_id == group_id,
         GroupMembership.role == GroupMembershipRole.LEADER
     ).count()
+
+
+class GroupMemberAddRequest(BaseModel):
+    user_email: str
+    membership_role: str = "member"
 
 
 # ============================================================================
@@ -373,6 +376,76 @@ async def leave_group(
     return {"status": "left"}
 
 
+
+@app.post("/groups/{group_id}/members", response_model=GroupMemberResponse)
+async def add_group_member(
+    group_id: UUID,
+    data: GroupMemberAddRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    US-B.4 - Add a registered user to the group by email.
+    Only the current group leader can add members.
+    """
+    group = _get_group_or_404(db, group_id)
+    _require_group_manager(db, group_id, current_user)
+
+    email = data.user_email.strip().lower()
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Member email is required"
+        )
+
+    normalized_role = data.membership_role.strip().lower()
+    if normalized_role not in {"member", "leader"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="membership_role must be either 'member' or 'leader'"
+        )
+
+    user = db.query(User).filter(User.email.ilike(email)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found. Ask the student to register first."
+        )
+
+    existing = _get_membership(db, group_id, user.id)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is already a member of this group"
+        )
+
+    if normalized_role == "leader":
+        existing_leaders = db.query(GroupMembership).filter(
+            GroupMembership.group_id == group_id,
+            GroupMembership.role == GroupMembershipRole.LEADER
+        ).all()
+
+        for leader in existing_leaders:
+            leader.role = GroupMembershipRole.MEMBER
+
+        group.created_by = user.id
+
+    membership = GroupMembership(
+        user_id=user.id,
+        group_id=group_id,
+        role=GroupMembershipRole.LEADER if normalized_role == "leader" else GroupMembershipRole.MEMBER
+    )
+    db.add(membership)
+    db.commit()
+
+    return GroupMemberResponse(
+        user_id=user.id,
+        user_name=user.name,
+        user_email=user.email,
+        membership_role=membership.role.value
+    )
+
+
 @app.delete("/groups/{group_id}/members/{user_id}")
 async def remove_group_member(
     group_id: UUID,
@@ -421,9 +494,10 @@ async def update_group_member_role(
     current_user = Depends(get_current_user)
 ):
     """
-    US-B.4 - Promote or demote a member between member and leader.
+    US-B.4 - Promote or demote a member.
+    Making someone leader transfers leadership from the current leader.
     """
-    _get_group_or_404(db, group_id)
+    group = _get_group_or_404(db, group_id)
     _require_group_manager(db, group_id, current_user)
 
     if str(user_id) == str(current_user["user_id"]):
@@ -446,17 +520,27 @@ async def update_group_member_role(
             detail="membership_role must be either 'member' or 'leader'"
         )
 
-    if (
-        membership.role == GroupMembershipRole.LEADER
-        and normalized_role == "member"
-        and _leader_count(db, group_id) <= 1
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot demote the only group leader"
-        )
+    if normalized_role == "leader":
+        existing_leaders = db.query(GroupMembership).filter(
+            GroupMembership.group_id == group_id,
+            GroupMembership.role == GroupMembershipRole.LEADER
+        ).all()
 
-    membership.role = GroupMembershipRole.LEADER if normalized_role == "leader" else GroupMembershipRole.MEMBER
+        for leader in existing_leaders:
+            leader.role = GroupMembershipRole.MEMBER
+
+        membership.role = GroupMembershipRole.LEADER
+        group.created_by = user_id
+
+    else:
+        if membership.role == GroupMembershipRole.LEADER and _leader_count(db, group_id) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot demote the only group leader"
+            )
+
+        membership.role = GroupMembershipRole.MEMBER
+
     db.commit()
     db.refresh(membership)
 
