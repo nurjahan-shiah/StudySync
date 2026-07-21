@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { Sidebar, ProfileButton } from "@/app/components/Sidebar";
 import { NotificationBell } from "@/app/components/NotificationBell";
 import { apiClient } from "@/lib/apiClient";
-import { useMyGroups } from "@/lib/hooks";
+import { useMyGroups, explainRecommendation, type MyGroup } from "@/lib/hooks";
 import { MAJOR_GROUPS } from "@/lib/majors";
 
 const T = {
@@ -22,6 +22,71 @@ const T = {
   text2:  "var(--text2)",
   red:    "var(--ss-red)",
 } as const;
+
+// US-G.1 @author: Uzma Alam - Group card with AI match explanation
+function GroupCard({ g }: { g: MyGroup }) {
+  const router = useRouter();
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [explaining, setExplaining]   = useState(false);
+
+  async function handleExplain(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (explanation) { setExplanation(null); return; }
+    setExplaining(true);
+    const res = await explainRecommendation(g.id);
+    if (res.data?.explanation) setExplanation(res.data.explanation);
+    setExplaining(false);
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => router.push(`/groups/${g.id}`)}
+      style={{
+        background: T.card, border: `1px solid ${T.border}`, borderRadius: 14,
+        padding: "16px 18px", cursor: "pointer",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = T.red)}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: T.text, margin: 0 }}>{g.name}</h3>
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+          textTransform: "uppercase", letterSpacing: "0.04em",
+          background: g.my_role === "leader" ? `${T.red}1a` : T.bg3,
+          color: g.my_role === "leader" ? T.red : T.text2,
+        }}>
+          {g.my_role}
+        </span>
+      </div>
+      <p style={{ fontSize: 12, color: T.text2, margin: "0 0 12px", minHeight: 32 }}>
+        {g.description || "No description."}
+      </p>
+      <div style={{ display: "flex", gap: 10, fontSize: 11, color: T.text2, marginBottom: 10 }}>
+        <span>👥 {g.member_count} member{g.member_count === 1 ? "" : "s"}</span>
+        {g.course_codes?.length > 0 && <span>· {g.course_codes.join(", ")}</span>}
+      </div>
+      {/* US-G.1 @author: Uzma Alam — AI match explanation button */}
+      <button
+        onClick={handleExplain}
+        style={{
+          fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 20,
+          border: `1px solid ${T.border}`, background: "transparent",
+          color: T.text2, cursor: "pointer",
+        }}
+      >
+        {explaining ? "Thinking…" : explanation ? "Hide" : "Why this group?"}
+      </button>
+      {explanation && (
+        <p style={{ fontSize: 12, color: T.text2, fontStyle: "italic", margin: "8px 0 0" }}>
+          {explanation}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function GroupsPage() {
   const router = useRouter();
@@ -176,45 +241,7 @@ export default function GroupsPage() {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
             {groups.map((g) => (
-              <div
-                key={g.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => router.push(`/groups/${g.id}`)}
-                style={{
-                  background: T.card, border: `1px solid ${T.border}`, borderRadius: 14,
-                  padding: "16px 18px", cursor: "pointer",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = T.red)}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: T.text, margin: 0 }}>{g.name}</h3>
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                    textTransform: "uppercase", letterSpacing: "0.04em",
-                    background: g.my_role === "leader" ? `${T.red}1a` : T.bg3,
-                    color: g.my_role === "leader" ? T.red : T.text2,
-                  }}>
-                    {g.my_role}
-                  </span>
-                </div>
-                <p style={{ fontSize: 12, color: T.text2, margin: "0 0 12px", minHeight: 32 }}>
-                  {g.description || "No description."}
-                </p>
-                <div style={{ display: "flex", gap: 10, fontSize: 11, color: T.text2, flexWrap: "wrap", alignItems: "center" }}>
-                  <span>👥 {g.member_count} member{g.member_count === 1 ? "" : "s"}</span>
-                  {g.course_codes?.length > 0 && <span>· {g.course_codes.join(", ")}</span>}
-                  {g.intended_major && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-                      background: `${T.red}15`, color: T.red,
-                    }}>
-                      🎓 {g.intended_major}
-                    </span>
-                  )}
-                </div>
-              </div>
+              <GroupCard key={g.id} g={g} />
             ))}
           </div>
         )}
