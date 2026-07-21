@@ -37,18 +37,21 @@ logger = logging.getLogger("api-gateway")
 # Configuration
 # ============================================================================
 
+# Each URL can be overridden via env var so the gateway works both under
+# `docker compose` (Docker DNS names) and on hosts like Render, where each
+# service gets its own private-network hostname/URL.
 SERVICE_URLS = {
-    "auth": "http://auth-service:8001",
-    "users": "http://users-service:8002",
-    "groups": "http://groups-service:8003",
-    "sessions": "http://sessions-service:8004",
-    "resources": "http://resources-service:8005",
-    "courses": "http://courses-service:8006",
-    "admin": "http://admin-service:8007",
-    "recommendations": "http://recommendations-service:8008",
-    "notifications": "http://notifications-service:8009",
-    "announcements": "http://announcements-service:8010",
-    "tasks": "http://tasks-service:8011",
+    "auth":            os.getenv("AUTH_SERVICE_URL",            "http://auth-service:8001"),
+    "users":           os.getenv("USERS_SERVICE_URL",           "http://users-service:8002"),
+    "groups":          os.getenv("GROUPS_SERVICE_URL",          "http://groups-service:8003"),
+    "sessions":        os.getenv("SESSIONS_SERVICE_URL",        "http://sessions-service:8004"),
+    "resources":       os.getenv("RESOURCES_SERVICE_URL",       "http://resources-service:8005"),
+    "courses":         os.getenv("COURSES_SERVICE_URL",         "http://courses-service:8006"),
+    "admin":           os.getenv("ADMIN_SERVICE_URL",           "http://admin-service:8007"),
+    "recommendations": os.getenv("RECOMMENDATIONS_SERVICE_URL", "http://recommendations-service:8008"),
+    "notifications":   os.getenv("NOTIFICATIONS_SERVICE_URL",   "http://notifications-service:8009"),
+    "announcements":   os.getenv("ANNOUNCEMENTS_SERVICE_URL",   "http://announcements-service:8010"),
+    "tasks":           os.getenv("TASKS_SERVICE_URL",           "http://tasks-service:8011"),
 }
 
 SECRET_KEY = os.getenv(

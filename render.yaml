@@ -1,0 +1,321 @@
+# render.yaml — Render Blueprint for StudySync backend
+#
+# Deploys: API gateway + 11 FastAPI microservices (free web services) and
+# the ETL/recommender pipeline (free background worker).
+#
+# Does NOT include Postgres or the frontend on purpose:
+#   - Postgres: point DATABASE_URL at your existing Supabase project's
+#     Postgres connection string (Supabase → Project Settings → Database →
+#     Connection string → "URI", use the pooled "Transaction" one). Render's
+#     own free Postgres auto-deletes after 30 days, which breaks "always on."
+#   - Frontend: deploy frontend/ to Vercel instead (better fit for Next.js,
+#     see notes at the end of this file).
+#
+# Setup:
+#   1. Push this file to the repo root (already done).
+#   2. Render dashboard → New → Blueprint → connect this repo.
+#   3. Render finds render.yaml and proposes all services below.
+#   4. Every env var marked `sync: false` prompts you for a value at
+#      deploy time (or set later in each service's Environment tab) —
+#      these are the secrets that must NOT live in git.
+#   5. First deploy: expect ~15-20 min while all 12 services build.
+
+services:
+  # ── API Gateway ────────────────────────────────────────────────────────
+  - type: web
+    name: studysync-gateway
+    runtime: docker
+    plan: free
+    dockerContext: ./api-gateway
+    dockerfilePath: ./api-gateway/Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: ALGORITHM
+        value: HS256
+      - key: LOG_LEVEL
+        value: info
+      - key: CORS_ORIGINS
+        sync: false
+      - key: AUTH_SERVICE_URL
+        value: http://studysync-auth:8001
+      - key: USERS_SERVICE_URL
+        value: http://studysync-users:8002
+      - key: GROUPS_SERVICE_URL
+        value: http://studysync-groups:8003
+      - key: SESSIONS_SERVICE_URL
+        value: http://studysync-sessions:8004
+      - key: RESOURCES_SERVICE_URL
+        value: http://studysync-resources:8005
+      - key: COURSES_SERVICE_URL
+        value: http://studysync-courses:8006
+      - key: ADMIN_SERVICE_URL
+        value: http://studysync-admin:8007
+      - key: RECOMMENDATIONS_SERVICE_URL
+        value: http://studysync-recommendations:8008
+      - key: NOTIFICATIONS_SERVICE_URL
+        value: http://studysync-notifications:8009
+      - key: ANNOUNCEMENTS_SERVICE_URL
+        value: http://studysync-announcements:8010
+      - key: TASKS_SERVICE_URL
+        value: http://studysync-tasks:8011
+
+  # ── Auth Service (US-A.1/A.2) ─────────────────────────────────────────
+  - type: web
+    name: studysync-auth
+    runtime: docker
+    plan: free
+    dockerContext: ./services/auth-service
+    dockerfilePath: ./services/auth-service/Dockerfile
+    healthCheckPath: /auth/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8001"
+
+  # ── Users Service (US-G.5) ────────────────────────────────────────────
+  - type: web
+    name: studysync-users
+    runtime: docker
+    plan: free
+    dockerContext: ./services/users-service
+    dockerfilePath: ./services/users-service/Dockerfile
+    healthCheckPath: /users/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8002"
+      - key: GROQ_API_KEY
+        sync: false
+
+  # ── Groups Service ─────────────────────────────────────────────────────
+  - type: web
+    name: studysync-groups
+    runtime: docker
+    plan: free
+    dockerContext: ./services/groups-service
+    dockerfilePath: ./services/groups-service/Dockerfile
+    healthCheckPath: /groups/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8003"
+
+  # ── Sessions Service ────────────────────────────────────────────────────
+  - type: web
+    name: studysync-sessions
+    runtime: docker
+    plan: free
+    dockerContext: ./services/sessions-service
+    dockerfilePath: ./services/sessions-service/Dockerfile
+    healthCheckPath: /sessions/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8004"
+      - key: GROQ_API_KEY
+        sync: false
+
+  # ── Resources Service (US-D.1) ────────────────────────────────────────
+  - type: web
+    name: studysync-resources
+    runtime: docker
+    plan: free
+    dockerContext: ./services/resources-service
+    dockerfilePath: ./services/resources-service/Dockerfile
+    healthCheckPath: /resources/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8005"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: resources
+
+  # ── Courses Service ─────────────────────────────────────────────────────
+  - type: web
+    name: studysync-courses
+    runtime: docker
+    plan: free
+    dockerContext: ./services/courses-service
+    dockerfilePath: ./services/courses-service/Dockerfile
+    healthCheckPath: /courses/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8006"
+
+  # ── Admin Service (US-F.1) ────────────────────────────────────────────
+  - type: web
+    name: studysync-admin
+    runtime: docker
+    plan: free
+    dockerContext: ./services/admin-service
+    dockerfilePath: ./services/admin-service/Dockerfile
+    healthCheckPath: /admin/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8007"
+
+  # ── Recommendations Service (US-F.4) ──────────────────────────────────
+  - type: web
+    name: studysync-recommendations
+    runtime: docker
+    plan: free
+    dockerContext: ./services/recommendations-service
+    dockerfilePath: ./services/recommendations-service/Dockerfile
+    healthCheckPath: /recommendations/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8008"
+      - key: DELTA_LAKE_PATH
+        value: /data/delta-lake
+
+  # ── Notifications Service ───────────────────────────────────────────────
+  - type: web
+    name: studysync-notifications
+    runtime: docker
+    plan: free
+    dockerContext: ./services/notifications-service
+    dockerfilePath: ./services/notifications-service/Dockerfile
+    healthCheckPath: /notifications/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8009"
+
+  # ── Announcements Service (US-E.2) ──────────────────────────────────────
+  - type: web
+    name: studysync-announcements
+    runtime: docker
+    plan: free
+    dockerContext: ./services/announcements-service
+    dockerfilePath: ./services/announcements-service/Dockerfile
+    healthCheckPath: /announcements/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8010"
+      - key: GROQ_API_KEY
+        sync: false
+
+  # ── Tasks Service ───────────────────────────────────────────────────────
+  - type: web
+    name: studysync-tasks
+    runtime: docker
+    plan: free
+    dockerContext: ./services/tasks-service
+    dockerfilePath: ./services/tasks-service/Dockerfile
+    healthCheckPath: /tasks/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: SERVICE_PORT
+        value: "8011"
+
+  # ── ETL + Recommender pipeline (US-F.3 / US-F.4) ──────────────────────
+  # Background worker: no public URL, no inbound HTTP, just runs the loop
+  # we already built (ETL_INTERVAL_MINUTES) so recommendations stay fresh
+  # without needing Render's paid Cron Jobs.
+  - type: worker
+    name: studysync-etl
+    runtime: docker
+    plan: free
+    dockerContext: ./datalake
+    dockerfilePath: ./datalake/Dockerfile.etl
+    dockerCommand: python3 -u etl_pipeline.py
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DELTA_LAKE_PATH
+        value: /data/delta-lake
+      - key: ETL_INTERVAL_MINUTES
+        value: "15"
+      - key: RUN_RECOMMENDER_AFTER_ETL
+        value: "1"
+
+# ─────────────────────────────────────────────────────────────────────────
+# Frontend (deploy separately on Vercel — not part of this blueprint):
+#
+#   1. vercel.com → New Project → import this repo.
+#   2. Root Directory: frontend
+#   3. Environment variables:
+#        NEXT_PUBLIC_API_URL          = https://studysync-gateway.onrender.com
+#        NEXT_PUBLIC_SUPABASE_URL     = <your Supabase project URL>
+#        NEXT_PUBLIC_SUPABASE_ANON_KEY = <your Supabase anon key>
+#        NEXT_PUBLIC_SUPABASE_BUCKET  = resources
+#   4. Deploy. Vercel auto-detects Next.js — no Dockerfile needed there.
+#   5. Back in Render, set the gateway's CORS to allow the Vercel domain
+#      (add a CORS_ORIGINS env var to studysync-gateway if the gateway
+#      code reads one — check api-gateway/main.py's CORSMiddleware config).
+# ─────────────────────────────────────────────────────────────────────────
