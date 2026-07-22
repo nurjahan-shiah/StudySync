@@ -3,7 +3,7 @@
  * Connects to API Gateway (port 8000)
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
 
 export interface ApiResponse<T> {
   data?: T;
@@ -188,7 +188,12 @@ class ApiClient {
     try {
       return JSON.parse(text);
     } catch {
-      return text;
+      // Non-JSON body — most commonly an HTML error page from the platform
+      // itself (Render/Cloudflare 502/504 pages, etc.) rather than anything
+      // our API ever intentionally returns. Never surface raw markup as an
+      // "error message" in the UI.
+      const looksLikeHtml = /^\s*<(!doctype|html)/i.test(text);
+      return looksLikeHtml ? null : text;
     }
   }
 
@@ -246,7 +251,10 @@ class ApiClient {
         return {
           error:
             errorData?.detail ||
-            (typeof data === 'string' ? data : 'Request failed'),
+            (typeof data === 'string' ? data : null) ||
+            (response.status >= 500
+              ? 'The server is temporarily unavailable. Please try again in a moment.'
+              : 'Request failed'),
           status: response.status,
         };
       }
