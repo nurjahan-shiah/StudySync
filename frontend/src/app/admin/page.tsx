@@ -309,16 +309,25 @@ export default function AdminDashboard() {
   async function seedCatalogue() {
     if (!confirm("Import the bundled York course catalogue? Existing courses are never modified.")) return;
     setSeeding(true);
-    const r = await fetch(`${API}/admin/courses/seed`, { method: "POST", headers: authHeaders() });
-    setSeeding(false);
-    if (r.ok) {
-      const data = await r.json();
-      showToast(`York catalogue: ${data.added} added, ${data.skipped} already present`);
-      fetchCourses();
-      fetchSummary();
-    } else {
-      const err = await r.json();
-      showToast(err.detail ?? "Seed failed", false);
+    try {
+      const r = await fetch(`${API}/admin/courses/seed`, { method: "POST", headers: authHeaders() });
+      let body: any = null;
+      try {
+        body = await r.json();
+      } catch {
+        // Non-JSON response (e.g. a platform 502/504 HTML page) — body stays null.
+      }
+      if (r.ok && body) {
+        showToast(`York catalogue: ${body.added} added, ${body.skipped} already present`);
+        fetchCourses();
+        fetchSummary();
+      } else {
+        showToast(body?.detail ?? `Seed failed (HTTP ${r.status})`, false);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Seed request failed — check your connection", false);
+    } finally {
+      setSeeding(false);
     }
   }
 
