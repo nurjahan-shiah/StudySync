@@ -87,6 +87,7 @@ export interface MajorRecommendation {
   member_count: number;
   course_codes: string[];
   year_match: boolean;
+  match_pct: number;
 }
 
 export interface MajorRecommendationsResponse {

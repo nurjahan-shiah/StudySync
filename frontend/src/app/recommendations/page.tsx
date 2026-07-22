@@ -295,32 +295,35 @@ function MajorSection({ userId }: { userId: string }) {
         </div>
       ) : data.recommendations.length === 0 ? (
         <p style={{ fontSize: 12.5, color: T.text2, margin: "6px 0 0" }}>
-          No open groups for {data.major} yet — check back once more groups form.
+          No open groups yet — check back once some have formed.
         </p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12, marginTop: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12, marginTop: 8 }}>
           {data.recommendations.map(g => (
-            <div key={g.group_id} className="ss-card" style={{ padding: "14px 16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                <p style={{ fontSize: 13.5, fontWeight: 800, color: T.text, margin: 0 }}>{g.name}</p>
-                {g.year_match && (
-                  <span style={{
-                    fontSize: 9.5, fontWeight: 700, padding: "1px 8px", borderRadius: 20,
-                    background: "rgba(0,184,148,.14)", color: T.green,
-                  }}>
-                    Your year
-                  </span>
+            <div key={g.group_id} className="ss-card" style={{ padding: "14px 16px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <MatchRing pct={g.match_pct} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                  <p style={{ fontSize: 13.5, fontWeight: 800, color: T.text, margin: 0 }}>{g.name}</p>
+                  {g.year_match && (
+                    <span style={{
+                      fontSize: 9.5, fontWeight: 700, padding: "1px 8px", borderRadius: 20,
+                      background: "rgba(0,184,148,.14)", color: T.green,
+                    }}>
+                      Your year
+                    </span>
+                  )}
+                </div>
+                {g.description && (
+                  <p style={{ fontSize: 11.5, color: T.text2, margin: "0 0 8px", lineHeight: 1.5 }}>
+                    {g.description.length > 110 ? g.description.slice(0, 110) + "…" : g.description}
+                  </p>
                 )}
-              </div>
-              {g.description && (
-                <p style={{ fontSize: 11.5, color: T.text2, margin: "0 0 8px", lineHeight: 1.5 }}>
-                  {g.description.length > 110 ? g.description.slice(0, 110) + "…" : g.description}
+                <p style={{ fontSize: 11, color: T.text2, margin: 0 }}>
+                  {g.member_count} member{g.member_count === 1 ? "" : "s"}
+                  {g.course_codes.length > 0 ? ` · ${g.course_codes.slice(0, 3).join(", ")}` : ""}
                 </p>
-              )}
-              <p style={{ fontSize: 11, color: T.text2, margin: 0 }}>
-                {g.member_count} member{g.member_count === 1 ? "" : "s"}
-                {g.course_codes.length > 0 ? ` · ${g.course_codes.slice(0, 3).join(", ")}` : ""}
-              </p>
+              </div>
             </div>
           ))}
         </div>
