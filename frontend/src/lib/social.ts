@@ -78,7 +78,14 @@ export const approveCourseRequest = (id: string, admin_note?: string) =>
 export const rejectCourseRequest = (id: string, admin_note?: string) =>
   apiClient.post<CourseRequest>(`/courses/requests/${id}/reject`, { admin_note });
 
-// ── Major-based recommendations (view only) ──────────────────────────────────
+// ── Major-based recommendations ──────────────────────────────────────────────
+
+export interface MajorRecommendationSession {
+  id: string;
+  title: string;
+  scheduled_at: string;
+  location: string | null;
+}
 
 export interface MajorRecommendation {
   group_id: string;
@@ -87,17 +94,39 @@ export interface MajorRecommendation {
   member_count: number;
   course_codes: string[];
   year_match: boolean;
+  match_pct: number;
+  already_joined: boolean;
+  upcoming_sessions: MajorRecommendationSession[];
 }
 
 export interface MajorRecommendationsResponse {
   profile_complete: boolean;
+  /** True for admin accounts: this feature is student-scoped, so the UI
+   *  should explain that rather than prompt for a major/year. */
+  not_applicable: boolean;
+  reason?: string;
   major: string | null;
   year_of_study: string | null;
+  total: number;
+  limit: number;
+  offset: number;
   recommendations: MajorRecommendation[];
 }
 
-export const getMajorRecommendations = () =>
-  apiClient.get<MajorRecommendationsResponse>("/recommendations/major");
+export const getMajorRecommendations = (opts?: {
+  limit?: number;
+  offset?: number;
+  includeJoined?: boolean;
+}) => {
+  const params = new URLSearchParams();
+  if (opts?.limit !== undefined) params.set("limit", String(opts.limit));
+  if (opts?.offset !== undefined) params.set("offset", String(opts.offset));
+  if (opts?.includeJoined !== undefined) params.set("include_joined", String(opts.includeJoined));
+  const qs = params.toString();
+  return apiClient.get<MajorRecommendationsResponse>(
+    `/recommendations/major${qs ? `?${qs}` : ""}`
+  );
+};
 
 // ── Social feed ──────────────────────────────────────────────────────────────
 
@@ -162,6 +191,47 @@ export const sendFriendRequest = (userId: string) =>
 
 export const acceptFriendRequest = (userId: string) =>
   apiClient.post<{ status: string }>(`/social/friends/${userId}/accept`, {});
+
+// ── Friend management ────────────────────────────────────────────────────────
+
+export interface Friend {
+  id: string;
+  name: string;
+  major: string | null;
+  friends_since: string | null;
+}
+
+export interface FriendRequest {
+  id: string;
+  name: string;
+  major: string | null;
+  requested_at: string | null;
+}
+
+export interface BlockedUser {
+  id: string;
+  name: string;
+  blocked_at: string | null;
+}
+
+export const getFriends = () =>
+  apiClient.get<Friend[]>("/social/friends");
+
+export const getFriendRequests = () =>
+  apiClient.get<FriendRequest[]>("/social/friends/requests");
+
+export const getBlockedUsers = () =>
+  apiClient.get<BlockedUser[]>("/social/friends/blocked");
+
+/** Unfriend, withdraw a sent request, or decline a received one. */
+export const removeFriend = (userId: string) =>
+  apiClient.delete(`/social/friends/${userId}`);
+
+export const blockUser = (userId: string) =>
+  apiClient.post<{ status: string }>(`/social/friends/${userId}/block`, {});
+
+export const unblockUser = (userId: string) =>
+  apiClient.delete(`/social/friends/${userId}/block`);
 
 // ── AI Study Assistant ───────────────────────────────────────────────────────
 

@@ -11,7 +11,7 @@ import sys
 sys.path.append("/shared")
 from shared_models import (
     Recommendation, Group, GroupMembership, UserEnrollment,
-    GroupCourse, Course, User, Base
+    GroupCourse, Course, User, StudySession, Base
 )
 from shared_database import engine, get_db, run_light_migrations
 from shared_auth import get_current_user
@@ -112,13 +112,47 @@ def _course_level(course_code: str) -> int | None:
     return None
 
 
+def _major_match_pct(user_major: str, group_major: str | None, year_match: bool) -> int:
+    """
+    Percentage match between the user's major and a group's intended major.
+    Groups aren't restricted to an exact major match — every open group is
+    shown, scored by how relevant it is:
+      - Exact major match           -> 100 (or 100 with the year bonus, capped)
+      - No intended major set       -> 40  (open to everyone, moderate baseline)
+      - Partial/related major       -> scaled by shared words between the two
+        major names (e.g. "Software Engineering" vs "Computer Engineering"
+        share "Engineering")
+    A +10 bonus is added when the group's courses sit at the user's year
+    level, capped at 100.
+    """
+    if not group_major:
+        base = 40
+    elif group_major.strip().lower() == user_major.strip().lower():
+        base = 100
+    else:
+        user_words = set(user_major.lower().split())
+        group_words = set(group_major.lower().split())
+        overlap = len(user_words & group_words)
+        union = len(user_words | group_words) or 1
+        base = round((overlap / union) * 80)  # partial credit only, never hits 100
+
+    if year_match:
+        base = min(100, base + 10)
+
+    return max(base, 5)
+
+
 @app.get("/recommendations/major")
 async def get_major_recommendations(db: Session = Depends(get_db),
                                     current_user: dict = Depends(get_current_user)):
-    """View-only group suggestions based on the user's major, weighted by which
-    year the user is in (groups whose courses sit at the user's level rank
+    """Group suggestions based on the user's major, weighted by which year
+    the user is in (groups whose courses sit at the user's level rank
     first). Requires a completed profile — otherwise the frontend shows
-    "complete setting up your profile to see recommendations"."""
+    "complete setting up your profile to see recommendations". Each group
+    includes its next couple of upcoming sessions so the student can see
+    real activity before deciding whether to join."""
+    from datetime import datetime
+
     user = db.query(User).filter(User.id == current_user["user_id"]).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -136,16 +170,19 @@ async def get_major_recommendations(db: Session = Depends(get_db),
         db.query(GroupMembership).filter(GroupMembership.user_id == user.id).all()
     }
     user_level = _YEAR_TO_LEVEL.get(user.year_of_study)
+    now = datetime.utcnow()
 
     results = []
+    # Every open group is shown here — not just groups whose intended_major
+    # exactly matches the user's. Relevance is instead expressed as a match
+    # percentage (see _major_match_pct) so the student can see the whole
+    # landscape of groups, ranked by how well each fits their major.
     groups = (db.query(Group)
                 .filter(Group.is_public == True,          # noqa: E712
-                        Group.is_deleted == False,        # noqa: E712
-                        Group.intended_major == user.major)
+                        Group.is_deleted == False)         # noqa: E712
                 .all())
     for group in groups:
-        if group.id in joined_group_ids:
-            continue
+        already_joined = group.id in joined_group_ids
 
         member_count = (db.query(GroupMembership)
                           .filter(GroupMembership.group_id == group.id)
@@ -157,6 +194,15 @@ async def get_major_recommendations(db: Session = Depends(get_db),
         course_codes = sorted(c.course_code for c in course_rows)
         levels = {lvl for c in course_rows if (lvl := _course_level(c.course_code)) is not None}
         year_match = bool(user_level and user_level in levels)
+        match_pct = _major_match_pct(user.major, group.intended_major, year_match)
+
+        upcoming_sessions = (db.query(StudySession)
+                               .filter(StudySession.group_id == group.id,
+                                       StudySession.is_cancelled == False,   # noqa: E712
+                                       StudySession.scheduled_at >= now)
+                               .order_by(StudySession.scheduled_at.asc())
+                               .limit(2)
+                               .all())
 
         results.append({
             "group_id": str(group.id),
@@ -165,10 +211,21 @@ async def get_major_recommendations(db: Session = Depends(get_db),
             "member_count": member_count,
             "course_codes": course_codes,
             "year_match": year_match,
+            "match_pct": match_pct,
+            "already_joined": already_joined,
+            "upcoming_sessions": [
+                {
+                    "id": str(s.id),
+                    "title": s.title,
+                    "scheduled_at": s.scheduled_at.isoformat(),
+                    "location": s.location,
+                }
+                for s in upcoming_sessions
+            ],
         })
 
-    # Groups at the user's course level first, then by size.
-    results.sort(key=lambda r: (not r["year_match"], -r["member_count"], r["name"]))
+    # Highest major match first, then groups at the user's course level, then by size.
+    results.sort(key=lambda r: (-r["match_pct"], not r["year_match"], -r["member_count"], r["name"]))
     return {
         "profile_complete": True,
         "major": user.major,

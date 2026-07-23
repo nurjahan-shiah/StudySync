@@ -17,8 +17,6 @@ import { Sidebar, ProfileButton } from "@/app/components/Sidebar";
 import { NotificationBell } from "@/app/components/NotificationBell";
 import { apiClient } from "@/lib/apiClient";
 import { explainRecommendation, joinGroup } from "@/lib/hooks";
-import { getMajorRecommendations, type MajorRecommendationsResponse } from "@/lib/social";
-import { ProfileSetupModal } from "@/app/components/ProfileSetupModal";
 
 const T = {
   bg:     "var(--bg)",
@@ -239,104 +237,6 @@ function Empty({ noCourses }: { noCourses: boolean }) {
   );
 }
 
-
-// ── "For your major" — view-only groups matched on major + year ─────────────
-
-function MajorSection({ userId }: { userId: string }) {
-  const [data, setData] = useState<MajorRecommendationsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [editOpen, setEditOpen] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const res = await getMajorRecommendations();
-    setData(res.data ?? null);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  return (
-    <section style={{ marginBottom: 26 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <h2 style={{ fontSize: 14, fontWeight: 800, color: T.text, margin: 0 }}>
-          For your major
-        </h2>
-        {data?.profile_complete && (
-          <span style={{
-            fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 20,
-            background: `${T.blue}1a`, color: T.blue,
-          }}>
-            {data.major} · {data.year_of_study}
-          </span>
-        )}
-        <span style={{ fontSize: 10.5, color: T.text2, fontWeight: 600 }}>view only</span>
-      </div>
-
-      {loading ? (
-        <p style={{ fontSize: 12.5, color: T.text2 }}>Loading…</p>
-      ) : !data ? null : !data.profile_complete ? (
-        <div style={{
-          background: T.card, border: `1px dashed ${T.border}`, borderRadius: 12,
-          padding: "18px 20px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
-        }}>
-          <span style={{ fontSize: 22 }}>👤</span>
-          <p style={{ fontSize: 12.5, color: T.text2, margin: 0, flex: 1, minWidth: 220 }}>
-            Complete setting up your profile (major + year of study) to see group
-            recommendations for your program.
-          </p>
-          <button
-            onClick={() => setEditOpen(true)}
-            className="ss-btn-primary"
-            style={{ fontSize: 12, padding: "8px 16px" }}
-          >
-            Complete your profile
-          </button>
-        </div>
-      ) : data.recommendations.length === 0 ? (
-        <p style={{ fontSize: 12.5, color: T.text2, margin: "6px 0 0" }}>
-          No open groups for {data.major} yet — check back once more groups form.
-        </p>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12, marginTop: 8 }}>
-          {data.recommendations.map(g => (
-            <div key={g.group_id} className="ss-card" style={{ padding: "14px 16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                <p style={{ fontSize: 13.5, fontWeight: 800, color: T.text, margin: 0 }}>{g.name}</p>
-                {g.year_match && (
-                  <span style={{
-                    fontSize: 9.5, fontWeight: 700, padding: "1px 8px", borderRadius: 20,
-                    background: "rgba(0,184,148,.14)", color: T.green,
-                  }}>
-                    Your year
-                  </span>
-                )}
-              </div>
-              {g.description && (
-                <p style={{ fontSize: 11.5, color: T.text2, margin: "0 0 8px", lineHeight: 1.5 }}>
-                  {g.description.length > 110 ? g.description.slice(0, 110) + "…" : g.description}
-                </p>
-              )}
-              <p style={{ fontSize: 11, color: T.text2, margin: 0 }}>
-                {g.member_count} member{g.member_count === 1 ? "" : "s"}
-                {g.course_codes.length > 0 ? ` · ${g.course_codes.slice(0, 3).join(", ")}` : ""}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {editOpen && (
-        <ProfileSetupModal
-          userId={userId}
-          onClose={() => setEditOpen(false)}
-          onSaved={load}
-        />
-      )}
-    </section>
-  );
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────
 
 export default function RecommendationsPage() {
@@ -390,14 +290,6 @@ export default function RecommendationsPage() {
             <ProfileButton />
           </div>
         </div>
-
-        <div style={{ marginTop: 20 }}>
-          {userId && <MajorSection userId={userId} />}
-        </div>
-
-        <h2 style={{ fontSize: 14, fontWeight: 800, color: T.text, margin: "0 0 2px" }}>
-          Course-overlap matches
-        </h2>
 
         {source && !loading && (
           <div style={{ margin: "18px 0 4px" }}>
