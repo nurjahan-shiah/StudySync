@@ -32,6 +32,37 @@ from shared_schemas import (
     GroupCreate, GroupResponse, GroupDetailResponse, GroupUpdate,
     GroupMemberResponse, GroupOwnershipTransfer, CourseResponse
 )
+from shared_notifications import create_notification  # US-E refinement: group lifecycle notifications
+
+
+def _actor_name(db: Session, user_id) -> str:
+    u = db.query(User).filter(User.id == user_id).first()
+    return u.name if u else "A member"
+
+
+def _notify_user(db: Session, user_id, ntype, title, message, link=None, group_id=None):
+    """Best-effort single-user notification — never breaks the core action."""
+    try:
+        create_notification(db, user_id=user_id, type=ntype, title=title,
+                            message=message, link=link, group_id=group_id)
+    except Exception as e:  # pragma: no cover
+        print(f"[groups-service] notification failed: {e}")
+
+
+def _notify_leaders(db: Session, group_id, exclude_user_id, title, message, link):
+    """Best-effort ambient 'group_activity' notification to the group's leaders."""
+    try:
+        leaders = (db.query(GroupMembership)
+                     .filter(GroupMembership.group_id == group_id,
+                             GroupMembership.role == GroupMembershipRole.LEADER)
+                     .all())
+        for m in leaders:
+            if exclude_user_id and str(m.user_id) == str(exclude_user_id):
+                continue
+            create_notification(db, user_id=m.user_id, type="group_activity",
+                                title=title, message=message, link=link, group_id=group_id)
+    except Exception as e:  # pragma: no cover
+        print(f"[groups-service] notify leaders failed: {e}")
 
 # ============================================================================
 # Initialize Database
@@ -466,7 +497,12 @@ async def join_group(
     _invalidate_recommendations(db, [current_user["user_id"]])
 
     db.commit()
-    
+
+    _notify_leaders(db, group_id, current_user["user_id"],
+                    title="New member joined",
+                    message=f"{_actor_name(db, current_user['user_id'])} joined {group.name}",
+                    link=f"/groups/{group_id}?tab=members")
+
     return {"status": "joined"}
 
 @app.delete("/groups/{group_id}/leave")
@@ -503,7 +539,12 @@ async def leave_group(
     _invalidate_recommendations(db, [current_user["user_id"]])
 
     db.commit()
-    
+
+    _notify_leaders(db, group_id, current_user["user_id"],
+                    title="A member left",
+                    message=f"{_actor_name(db, current_user['user_id'])} left {group.name}",
+                    link=f"/groups/{group_id}?tab=members")
+
     return {"status": "left"}
 
 
@@ -547,6 +588,11 @@ async def remove_group_member(
 
     db.delete(membership)
     db.commit()
+
+    _notify_user(db, user_id, "system",
+                 title="Removed from a group",
+                 message=f"You were removed from {group.name}",
+                 link="/groups")
 
     return {"status": "removed", "group_id": group_id, "user_id": user_id}
 
@@ -604,6 +650,11 @@ async def update_group_member_role(
     db.commit()
     db.refresh(membership)
 
+    _notify_user(db, user_id, "system",
+                 title="Your group role changed",
+                 message=f"You are now a {normalized_role} in {group.name}",
+                 link=f"/groups/{group_id}", group_id=group_id)
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(
@@ -642,6 +693,11 @@ async def transfer_group_ownership(
     new_owner_membership.role = GroupMembershipRole.LEADER
     group.created_by = transfer.new_owner_id
     db.commit()
+
+    _notify_user(db, transfer.new_owner_id, "system",
+                 title="You are now a group owner",
+                 message=f"You are now the owner of {group.name}",
+                 link=f"/groups/{group_id}", group_id=group_id)
 
     return {
         "status": "transferred",

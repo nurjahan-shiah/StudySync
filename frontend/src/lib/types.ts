@@ -87,6 +87,7 @@ export type NotificationType =
   | "announcement"
   | "task"
   | "resource"
+  | "group_activity"
   | "system";
 
 export interface Notification {

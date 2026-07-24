@@ -53,6 +53,7 @@ _TYPE_TO_CATEGORY = {
     "announcement": "announcements",
     "task": "tasks",
     "resource": "resources",
+    "group_activity": "group_activity",
 }
 
 

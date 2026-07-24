@@ -31,6 +31,7 @@ class NotificationType(str, enum.Enum):
     ANNOUNCEMENT = "announcement"
     TASK = "task"
     RESOURCE = "resource"
+    GROUP_ACTIVITY = "group_activity"
     SYSTEM = "system"
 
 # ============================================================================
