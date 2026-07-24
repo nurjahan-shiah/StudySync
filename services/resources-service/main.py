@@ -162,6 +162,7 @@ from shared_models import Course, UserEnrollment
 from shared_database import engine, get_db
 from shared_auth import get_current_user
 from shared_schemas import ResourceResponse, AiTutorRequest, AiTutorResponse
+from shared_notifications import create_group_notifications  # notify group on new resource
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -226,6 +227,20 @@ async def create_resource(group_id: str, file_name: str, file_url: str, file_typ
     db.add(new_resource)
     db.commit()
     db.refresh(new_resource)
+
+    # Notify group members that a new resource was shared (best-effort).
+    try:
+        create_group_notifications(
+            db, group_id=group_id, type="resource",
+            title="New resource shared",
+            message=file_name,
+            link=f"/groups/{group_id}?tab=resources",
+            exclude_user_id=current_user["user_id"],
+            meta={"resource_id": str(new_resource.id), "group_id": str(group_id)},
+        )
+    except Exception as e:  # pragma: no cover
+        print(f"[resources-service] resource notification failed: {e}")
+
     return new_resource
 
 @app.get("/resources/{resource_id}", response_model=ResourceResponse)

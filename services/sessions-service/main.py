@@ -12,12 +12,12 @@ import sys
 import os
 import httpx
 sys.path.append("/shared")
-from shared_models import StudySession, Group, GroupMembership, GroupMembershipRole, Base
+from shared_models import StudySession, Group, GroupMembership, GroupMembershipRole, User, Base
 from shared_database import engine, get_db
 from shared_auth import get_current_user
 from shared_schemas import StudySessionCreate, StudySessionUpdate, StudySessionResponse, StudySessionDetailResponse, SessionRSVPCreate, SessionRSVPResponse
 from shared_models import SessionRSVP, SessionRSVPStatus
-from shared_notifications import create_group_notifications  # US-E.1
+from shared_notifications import create_group_notifications, create_notification  # US-E.1
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -166,13 +166,30 @@ async def rsvp_session(session_id: str, data: SessionRSVPCreate,
         existing.status = rsvp_status
         db.commit()
         db.refresh(existing)
-        return existing
-    rsvp = SessionRSVP(id=uuid4(), session_id=session_id,
-                       user_id=current_user["user_id"], status=rsvp_status)
-    db.add(rsvp)
-    db.commit()
-    db.refresh(rsvp)
-    return rsvp
+        result = existing
+    else:
+        rsvp = SessionRSVP(id=uuid4(), session_id=session_id,
+                           user_id=current_user["user_id"], status=rsvp_status)
+        db.add(rsvp)
+        db.commit()
+        db.refresh(rsvp)
+        result = rsvp
+
+    # Notify the session's creator that someone RSVP'd (best-effort; skip self-RSVP).
+    if str(session.created_by) != str(current_user["user_id"]):
+        try:
+            actor = db.query(User).filter(User.id == current_user["user_id"]).first()
+            create_notification(
+                db, user_id=session.created_by, type="session",
+                title="Session RSVP",
+                message=f"{actor.name if actor else 'A member'} RSVP'd {rsvp_status.value} to {session.title}",
+                link=f"/sessions/{session_id}",
+                meta={"session_id": str(session_id)},
+            )
+        except Exception as e:  # pragma: no cover
+            print(f"[sessions-service] rsvp notification failed: {e}")
+
+    return result
 
 @app.put("/sessions/{session_id}", response_model=StudySessionResponse)
 async def update_session(session_id: str, data: StudySessionUpdate,
